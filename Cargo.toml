@@ -1,0 +1,18 @@
+[package]
+name = "moncorp-rustvoice"
+version = "0.1.0"
+authors = ["mondotosz <mon.osz@moncorp.ch>"]
+edition = "2021"
+description = "A rust implementation of the autovoice bot for discord"
+license = "MIT OR Apache-2.0"
+keywords = ["discord", "bot", "autovoice"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dotenv = "0.15.0"
+env_logger = "0.10.0"
+poise = "0.5.5"
+serenity = { version = "0.11.6", default-features= false, features = ["client", "gateway", "rustls_backend", "model"] }
+sqlx = { version = "0.7.0", features = ["sqlite", "runtime-tokio-rustls"] }
+tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread"] }
