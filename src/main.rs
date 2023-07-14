@@ -98,7 +98,7 @@ async fn main() {
                         update_channels(_ctx,_data, old, new).await
                     }
                     _ => {
-                        println!("Unused event triggered: {:?}", event.name());
+                        // println!("Unused event triggered: {:?}", event.name());
                         Ok(())
                     }
                 }

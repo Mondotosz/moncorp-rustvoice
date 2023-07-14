@@ -101,9 +101,26 @@ pub async fn rename(
 ) -> Result<(), Error> {
     let mut cur_channel = get_voice_channel(ctx).await?;
 
+    let channel_id: i64 = cur_channel.id.into();
+
+    if sqlx::query_as!(
+        TemporaryChannel,
+        "SELECT * FROM temporary_channels WHERE id = ?",
+        channel_id
+    )
+    .fetch_one(&ctx.data().db)
+    .await
+    .is_err()
+    {
+        ctx.say("Permanent channels cannot be renamed").await?;
+        return Ok(());
+    }
+
     // TODO: Check that the channel is a temporary channel before renaming
 
-    let result = cur_channel.edit(ctx.http(), |c| c.name(&name)).await;
+    let result = cur_channel
+        .edit(ctx.http(), |c| c.name(format!("[{}]", &name)))
+        .await;
 
     match result {
         Ok(_) => {
@@ -161,8 +178,6 @@ pub async fn update_channels(
     new: &serenity::model::voice::VoiceState,
 ) -> Result<(), Error> {
     // TODO: handle errors after running all the handlers
-    println!("old: {:#?}\n\nnew: {:#?}", old, new);
-
     let _result = voice_join_handler(ctx, data, new).await;
 
     if let Some(old) = old {
@@ -233,11 +248,28 @@ async fn handle_primary_channels(
     state: &serenity::model::voice::VoiceState,
     data: &Data,
 ) -> Result<(), Error> {
-    // Create a temporary channel and move the user to it
     let guild = state.guild_id.unwrap().to_guild_cached(&ctx.cache).unwrap();
+    // Get the category of the primary channel
+
+    let category = state
+        .channel_id
+        .unwrap_or_default()
+        .to_channel_cached(&ctx.cache)
+        .unwrap()
+        .guild()
+        .unwrap()
+        .parent_id;
+    // Create a temporary channel and move the user to it
 
     let channel = guild
-        .create_channel(ctx.http(), |c| c.name("[General]").kind(ChannelType::Voice))
+        .create_channel(ctx.http(), |c| {
+            let builder = c.name("[General]").kind(ChannelType::Voice);
+
+            match category {
+                Some(category) => builder.category(category),
+                None => builder,
+            }
+        })
         .await?;
 
     // Save the new channel to the database
@@ -262,7 +294,19 @@ async fn handle_temporary_channels(
     data: &Data,
     state: &serenity::model::voice::VoiceState,
 ) -> Result<(), Error> {
-    let guild = state.guild_id.unwrap().to_guild_cached(&ctx.cache).unwrap();
+    let guild_id = state.guild_id;
+
+    if guild_id.is_none() {
+        return Err("No guild id found".into());
+    }
+
+    let guild = guild_id.unwrap().to_guild_cached(&ctx.cache);
+
+    if guild.is_none() {
+        return Err("No guild found".into());
+    }
+
+    let guild = guild.unwrap();
 
     let channel = guild.channels.get(&state.channel_id.unwrap()).unwrap();
 
