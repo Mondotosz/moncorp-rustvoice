@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO primary_channels (id) VALUES (?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "0a6d69109aaafc0876ab2c30fa6283db097d36c09ae55e1227e2738d84b2a8fa"
+}

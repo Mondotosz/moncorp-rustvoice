@@ -1,7 +1,9 @@
 #![warn(clippy::str_to_string)]
 
 mod commands;
+mod models;
 
+use commands::auto_voice::update_channels;
 use poise::serenity_prelude as serenity;
 use std::{env::var, time::Duration};
 
@@ -86,22 +88,20 @@ async fn main() {
                 println!("Executed command {}!", ctx.command().qualified_name);
             })
         },
-        /// Every command invocation must pass this check to continue execution
-        command_check: Some(|ctx| {
-            Box::pin(async move {
-                if ctx.author().id == 123456789 {
-                    return Ok(false);
-                }
-                Ok(true)
-            })
-        }),
         /// Enforce command checks even for owners (enforced by default)
         /// Set to true to bypass checks, which is useful for testing
         skip_checks_for_owners: false,
-        event_handler: |_ctx, event, _framework, _data| {
+        event_handler: |_ctx, event: &poise::Event<'_>, _framework, _data| {
             Box::pin(async move {
-                println!("Got an event in event handler: {:?}", event.name());
-                Ok(())
+                match event {
+                    poise::Event::VoiceStateUpdate { old , new } => {
+                        update_channels(_ctx,_data, old, new).await
+                    }
+                    _ => {
+                        println!("Unused event triggered: {:?}", event.name());
+                        Ok(())
+                    }
+                }
             })
         },
         ..Default::default()
