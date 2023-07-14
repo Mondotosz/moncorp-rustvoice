@@ -1,5 +1,6 @@
-use poise::serenity_prelude::ChannelType;
+use poise::serenity_prelude::{ChannelType, PermissionOverwrite};
 use serenity::http::CacheHttp;
+use serenity::model::Permissions;
 
 use crate::models::{PrimaryChannel, TemporaryChannel};
 use crate::{Context, Data, Error};
@@ -103,6 +104,7 @@ pub async fn rename(
 
     let channel_id: i64 = cur_channel.id.into();
 
+    // Check if the channel is temporary before renaming
     if sqlx::query_as!(
         TemporaryChannel,
         "SELECT * FROM temporary_channels WHERE id = ?",
@@ -115,8 +117,6 @@ pub async fn rename(
         ctx.say("Permanent channels cannot be renamed").await?;
         return Ok(());
     }
-
-    // TODO: Check that the channel is a temporary channel before renaming
 
     let result = cur_channel
         .edit(ctx.http(), |c| c.name(format!("[{}]", &name)))
@@ -137,7 +137,37 @@ pub async fn rename(
     required_bot_permissions = "MANAGE_CHANNELS"
 )]
 pub async fn private(ctx: Context<'_>) -> Result<(), Error> {
+    let mut cur_channel = get_voice_channel(ctx).await?;
+
+    let channel_id: i64 = cur_channel.id.into();
+    // Check if the channel is temporary before renaming
+    if sqlx::query_as!(
+        TemporaryChannel,
+        "SELECT * FROM temporary_channels WHERE id = ?",
+        channel_id
+    )
+    .fetch_one(&ctx.data().db)
+    .await
+    .is_err()
+    {
+        ctx.say("Permanent channels cannot be modified").await?;
+        return Ok(());
+    }
+
+    let guild = ctx.guild().unwrap();
+
+    cur_channel
+        .edit(&ctx.http(), |c| {
+            c.permissions(vec![PermissionOverwrite {
+                allow: Permissions::empty(),
+                deny: Permissions::CONNECT,
+                kind: serenity::model::channel::PermissionOverwriteType::Role(guild.id.0.into()),
+            }])
+        })
+        .await?;
+
     ctx.say("Making channel private...").await?;
+
     Ok(())
 }
 
@@ -147,7 +177,37 @@ pub async fn private(ctx: Context<'_>) -> Result<(), Error> {
     required_bot_permissions = "MANAGE_CHANNELS"
 )]
 pub async fn public(ctx: Context<'_>) -> Result<(), Error> {
+    let mut cur_channel = get_voice_channel(ctx).await?;
+
+    let channel_id: i64 = cur_channel.id.into();
+    // Check if the channel is temporary before renaming
+    if sqlx::query_as!(
+        TemporaryChannel,
+        "SELECT * FROM temporary_channels WHERE id = ?",
+        channel_id
+    )
+    .fetch_one(&ctx.data().db)
+    .await
+    .is_err()
+    {
+        ctx.say("Permanent channels cannot be modified").await?;
+        return Ok(());
+    }
+
+    let guild = ctx.guild().unwrap();
+
+    cur_channel
+        .edit(&ctx.http(), |c| {
+            c.permissions(vec![PermissionOverwrite {
+                allow: Permissions::empty(),
+                deny: Permissions::empty(),
+                kind: serenity::model::channel::PermissionOverwriteType::Role(guild.id.0.into()),
+            }])
+        })
+        .await?;
+
     ctx.say("Making channel public...").await?;
+
     Ok(())
 }
 
@@ -156,8 +216,38 @@ pub async fn public(ctx: Context<'_>) -> Result<(), Error> {
     guild_only,
     required_bot_permissions = "MANAGE_CHANNELS"
 )]
-pub async fn limit(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.say("Limiting channel...").await?;
+pub async fn limit(
+    ctx: Context<'_>,
+    #[description = "The number of users"] number: u64,
+) -> Result<(), Error> {
+    let mut cur_channel = get_voice_channel(ctx).await?;
+
+    let channel_id: i64 = cur_channel.id.into();
+    // Check if the channel is temporary before renaming
+    if sqlx::query_as!(
+        TemporaryChannel,
+        "SELECT * FROM temporary_channels WHERE id = ?",
+        channel_id
+    )
+    .fetch_one(&ctx.data().db)
+    .await
+    .is_err()
+    {
+        ctx.say("Permanent channels cannot be modified").await?;
+        return Ok(());
+    }
+
+    if cur_channel
+        .edit(ctx.http(), |c| c.user_limit(number))
+        .await
+        .is_err()
+    {
+        return Err("Failed to limit channel".into());
+    }
+
+    ctx.say(format!("Limited channel to {} users", number))
+        .await?;
+
     Ok(())
 }
 
@@ -167,7 +257,33 @@ pub async fn limit(ctx: Context<'_>) -> Result<(), Error> {
     required_bot_permissions = "MANAGE_CHANNELS"
 )]
 pub async fn unlimit(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.say("Unlimiting channel...").await?;
+    let mut cur_channel = get_voice_channel(ctx).await?;
+
+    let channel_id: i64 = cur_channel.id.into();
+    // Check if the channel is temporary before renaming
+    if sqlx::query_as!(
+        TemporaryChannel,
+        "SELECT * FROM temporary_channels WHERE id = ?",
+        channel_id
+    )
+    .fetch_one(&ctx.data().db)
+    .await
+    .is_err()
+    {
+        ctx.say("Permanent channels cannot be modified").await?;
+        return Ok(());
+    }
+
+    if cur_channel
+        .edit(ctx.http(), |c| c.user_limit(0))
+        .await
+        .is_err()
+    {
+        return Err("Failed to limit channel".into());
+    }
+
+    ctx.say("Removed channel limit").await?;
+
     Ok(())
 }
 
