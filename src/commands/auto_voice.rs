@@ -53,6 +53,8 @@ async fn get_voice_channel(
     }
 
     if cur_channel.is_none() {
+        ctx.say("You must be in a voice channel to use this command.")
+            .await?;
         return Err("User not found in any voice channel".into());
     }
 
@@ -98,15 +100,15 @@ pub async fn rename(
     ctx: Context<'_>,
     #[description = "The new name of the channel"] name: String,
 ) -> Result<(), Error> {
-    let mut cur_channel = get_voice_channel(ctx).await?;
+    let mut channel = get_voice_channel(ctx).await?;
 
     // Check if the channel is temporary before renaming
-    if !TemporaryChannel::exists(cur_channel.id.into(), &ctx.data().db).await? {
+    if !TemporaryChannel::exists(channel.id.into(), &ctx.data().db).await? {
         ctx.say("Permanent channels cannot be renamed").await?;
         return Ok(());
     }
 
-    let result = cur_channel
+    let result = channel
         .edit(ctx.http(), |c| c.name(format!("[{}]", &name)))
         .await;
 
@@ -125,17 +127,17 @@ pub async fn rename(
     required_bot_permissions = "MANAGE_CHANNELS"
 )]
 pub async fn private(ctx: Context<'_>) -> Result<(), Error> {
-    let mut cur_channel = get_voice_channel(ctx).await?;
+    let mut channel = get_voice_channel(ctx).await?;
 
     // Check if the channel is temporary before renaming
-    if !TemporaryChannel::exists(cur_channel.id.into(), &ctx.data().db).await? {
+    if !TemporaryChannel::exists(channel.id.into(), &ctx.data().db).await? {
         ctx.say("Permanent channels cannot be modified").await?;
         return Ok(());
     }
 
     let guild = ctx.guild().unwrap();
 
-    cur_channel
+    channel
         .edit(&ctx.http(), |c| {
             c.permissions(vec![PermissionOverwrite {
                 allow: Permissions::empty(),
@@ -156,17 +158,17 @@ pub async fn private(ctx: Context<'_>) -> Result<(), Error> {
     required_bot_permissions = "MANAGE_CHANNELS"
 )]
 pub async fn public(ctx: Context<'_>) -> Result<(), Error> {
-    let mut cur_channel = get_voice_channel(ctx).await?;
+    let mut channel = get_voice_channel(ctx).await?;
 
     // Check if the channel is temporary before renaming
-    if !TemporaryChannel::exists(cur_channel.id.into(), &ctx.data().db).await? {
+    if !TemporaryChannel::exists(channel.id.into(), &ctx.data().db).await? {
         ctx.say("Permanent channels cannot be modified").await?;
         return Ok(());
     }
 
     let guild = ctx.guild().unwrap();
 
-    cur_channel
+    channel
         .edit(&ctx.http(), |c| {
             c.permissions(vec![PermissionOverwrite {
                 allow: Permissions::empty(),
@@ -188,17 +190,20 @@ pub async fn public(ctx: Context<'_>) -> Result<(), Error> {
 )]
 pub async fn limit(
     ctx: Context<'_>,
-    #[description = "The number of users"] number: u64,
+    #[description = "The number of users"]
+    #[max = 99]
+    #[min = 1]
+    number: u64,
 ) -> Result<(), Error> {
-    let mut cur_channel = get_voice_channel(ctx).await?;
+    let mut channel = get_voice_channel(ctx).await?;
 
     // Check if the channel is temporary before renaming
-    if !TemporaryChannel::exists(cur_channel.id.into(), &ctx.data().db).await? {
+    if !TemporaryChannel::exists(channel.id.into(), &ctx.data().db).await? {
         ctx.say("Permanent channels cannot be modified").await?;
         return Ok(());
     }
 
-    if cur_channel
+    if channel
         .edit(ctx.http(), |c| c.user_limit(number))
         .await
         .is_err()
@@ -218,15 +223,15 @@ pub async fn limit(
     required_bot_permissions = "MANAGE_CHANNELS"
 )]
 pub async fn unlimit(ctx: Context<'_>) -> Result<(), Error> {
-    let mut cur_channel = get_voice_channel(ctx).await?;
+    let mut channel = get_voice_channel(ctx).await?;
 
     // Check if the channel is temporary before renaming
-    if !TemporaryChannel::exists(cur_channel.id.into(), &ctx.data().db).await? {
+    if !TemporaryChannel::exists(channel.id.into(), &ctx.data().db).await? {
         ctx.say("Permanent channels cannot be modified").await?;
         return Ok(());
     }
 
-    if cur_channel
+    if channel
         .edit(ctx.http(), |c| c.user_limit(0))
         .await
         .is_err()
@@ -260,14 +265,12 @@ async fn voice_join_handler(
     data: &Data,
     state: &serenity::model::voice::VoiceState,
 ) -> Result<(), Error> {
-    let channel_id = state.channel_id;
-
-    if channel_id.is_none() {
+    if state.channel_id.is_none() {
         // Happens when the user leaves
         return Ok(());
     }
 
-    if PrimaryChannel::exists(channel_id.unwrap().into(), &data.db).await? {
+    if PrimaryChannel::exists(state.channel_id.unwrap().into(), &data.db).await? {
         handle_primary_channels(ctx, state, data).await?;
     }
 
@@ -279,13 +282,12 @@ async fn voice_leave_handler(
     data: &Data,
     state: &serenity::model::voice::VoiceState,
 ) -> Result<(), Error> {
-    let channel_id = state.channel_id;
 
-    if channel_id.is_none() {
+    if state.channel_id.is_none() {
         return Err("No channel id found".into());
     }
 
-    if TemporaryChannel::exists(channel_id.unwrap().into(), &data.db).await? {
+    if TemporaryChannel::exists(state.channel_id.unwrap().into(), &data.db).await? {
         handle_temporary_channels(ctx, data, state).await?;
     }
     Ok(())
