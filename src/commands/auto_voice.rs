@@ -83,9 +83,7 @@ pub async fn create(ctx: Context<'_>) -> Result<(), Error> {
 
         let id: i64 = channel.id.into();
 
-        sqlx::query!("INSERT INTO primary_channels (id) VALUES (?)", id)
-            .execute(&ctx.data().db)
-            .await?;
+        PrimaryChannel::insert(id, &ctx.data().db).await?;
     }
 
     Ok(())
@@ -102,18 +100,8 @@ pub async fn rename(
 ) -> Result<(), Error> {
     let mut cur_channel = get_voice_channel(ctx).await?;
 
-    let channel_id: i64 = cur_channel.id.into();
-
     // Check if the channel is temporary before renaming
-    if sqlx::query_as!(
-        TemporaryChannel,
-        "SELECT * FROM temporary_channels WHERE id = ?",
-        channel_id
-    )
-    .fetch_one(&ctx.data().db)
-    .await
-    .is_err()
-    {
+    if !TemporaryChannel::exists(cur_channel.id.into(), &ctx.data().db).await? {
         ctx.say("Permanent channels cannot be renamed").await?;
         return Ok(());
     }
@@ -139,17 +127,8 @@ pub async fn rename(
 pub async fn private(ctx: Context<'_>) -> Result<(), Error> {
     let mut cur_channel = get_voice_channel(ctx).await?;
 
-    let channel_id: i64 = cur_channel.id.into();
     // Check if the channel is temporary before renaming
-    if sqlx::query_as!(
-        TemporaryChannel,
-        "SELECT * FROM temporary_channels WHERE id = ?",
-        channel_id
-    )
-    .fetch_one(&ctx.data().db)
-    .await
-    .is_err()
-    {
+    if !TemporaryChannel::exists(cur_channel.id.into(), &ctx.data().db).await? {
         ctx.say("Permanent channels cannot be modified").await?;
         return Ok(());
     }
@@ -179,17 +158,8 @@ pub async fn private(ctx: Context<'_>) -> Result<(), Error> {
 pub async fn public(ctx: Context<'_>) -> Result<(), Error> {
     let mut cur_channel = get_voice_channel(ctx).await?;
 
-    let channel_id: i64 = cur_channel.id.into();
     // Check if the channel is temporary before renaming
-    if sqlx::query_as!(
-        TemporaryChannel,
-        "SELECT * FROM temporary_channels WHERE id = ?",
-        channel_id
-    )
-    .fetch_one(&ctx.data().db)
-    .await
-    .is_err()
-    {
+    if !TemporaryChannel::exists(cur_channel.id.into(), &ctx.data().db).await? {
         ctx.say("Permanent channels cannot be modified").await?;
         return Ok(());
     }
@@ -222,17 +192,8 @@ pub async fn limit(
 ) -> Result<(), Error> {
     let mut cur_channel = get_voice_channel(ctx).await?;
 
-    let channel_id: i64 = cur_channel.id.into();
     // Check if the channel is temporary before renaming
-    if sqlx::query_as!(
-        TemporaryChannel,
-        "SELECT * FROM temporary_channels WHERE id = ?",
-        channel_id
-    )
-    .fetch_one(&ctx.data().db)
-    .await
-    .is_err()
-    {
+    if !TemporaryChannel::exists(cur_channel.id.into(), &ctx.data().db).await? {
         ctx.say("Permanent channels cannot be modified").await?;
         return Ok(());
     }
@@ -259,17 +220,8 @@ pub async fn limit(
 pub async fn unlimit(ctx: Context<'_>) -> Result<(), Error> {
     let mut cur_channel = get_voice_channel(ctx).await?;
 
-    let channel_id: i64 = cur_channel.id.into();
     // Check if the channel is temporary before renaming
-    if sqlx::query_as!(
-        TemporaryChannel,
-        "SELECT * FROM temporary_channels WHERE id = ?",
-        channel_id
-    )
-    .fetch_one(&ctx.data().db)
-    .await
-    .is_err()
-    {
+    if !TemporaryChannel::exists(cur_channel.id.into(), &ctx.data().db).await? {
         ctx.say("Permanent channels cannot be modified").await?;
         return Ok(());
     }
@@ -315,17 +267,7 @@ async fn voice_join_handler(
         return Ok(());
     }
 
-    let channel_id: i64 = channel_id.unwrap().into();
-
-    if sqlx::query_as!(
-        PrimaryChannel,
-        "SELECT * FROM primary_channels WHERE id = ?",
-        channel_id
-    )
-    .fetch_one(&data.db)
-    .await
-    .is_ok()
-    {
+    if PrimaryChannel::exists(channel_id.unwrap().into(), &data.db).await? {
         handle_primary_channels(ctx, state, data).await?;
     }
 
@@ -343,17 +285,7 @@ async fn voice_leave_handler(
         return Err("No channel id found".into());
     }
 
-    let channel_id: i64 = channel_id.unwrap().into();
-
-    if sqlx::query_as!(
-        TemporaryChannel,
-        "SELECT * FROM temporary_channels WHERE id = ?",
-        channel_id
-    )
-    .fetch_one(&data.db)
-    .await
-    .is_ok()
-    {
+    if TemporaryChannel::exists(channel_id.unwrap().into(), &data.db).await? {
         handle_temporary_channels(ctx, data, state).await?;
     }
     Ok(())
@@ -389,10 +321,7 @@ async fn handle_primary_channels(
         .await?;
 
     // Save the new channel to the database
-    let temp_id: i64 = channel.id.into();
-    sqlx::query!("INSERT INTO temporary_channels (id) VALUES (?)", temp_id)
-        .execute(&data.db)
-        .await?;
+    TemporaryChannel::insert(channel.id.into(), &data.db).await?;
 
     // Move the user to the new channel
     let _member = state
@@ -444,10 +373,7 @@ async fn handle_temporary_channels(
     channel.delete(&ctx.http).await?;
 
     // Update the database
-    let channel_id: i64 = channel.id().into();
-    sqlx::query!("DELETE FROM temporary_channels WHERE id = ?", channel_id)
-        .execute(&data.db)
-        .await?;
+    TemporaryChannel::delete(channel.id().into(), &data.db).await?;
 
     Ok(())
 }
