@@ -139,11 +139,22 @@ pub async fn private(ctx: Context<'_>) -> Result<(), Error> {
 
     channel
         .edit(&ctx.http(), |c| {
-            c.permissions(vec![PermissionOverwrite {
-                allow: Permissions::empty(),
-                deny: Permissions::CONNECT,
-                kind: serenity::model::channel::PermissionOverwriteType::Role(guild.id.0.into()),
-            }])
+            c.permissions(vec![
+                PermissionOverwrite {
+                    allow: Permissions::empty(),
+                    deny: Permissions::CONNECT,
+                    kind: serenity::model::channel::PermissionOverwriteType::Role(
+                        guild.id.0.into(),
+                    ),
+                },
+                PermissionOverwrite {
+                    allow: Permissions::CONNECT,
+                    deny: Permissions::empty(),
+                    kind: serenity::model::channel::PermissionOverwriteType::Member(
+                        ctx.framework().bot_id,
+                    ),
+                },
+            ])
         })
         .await?;
 
@@ -231,11 +242,7 @@ pub async fn unlimit(ctx: Context<'_>) -> Result<(), Error> {
         return Ok(());
     }
 
-    if channel
-        .edit(ctx.http(), |c| c.user_limit(0))
-        .await
-        .is_err()
-    {
+    if channel.edit(ctx.http(), |c| c.user_limit(0)).await.is_err() {
         return Err("Failed to limit channel".into());
     }
 
@@ -282,7 +289,6 @@ async fn voice_leave_handler(
     data: &Data,
     state: &serenity::model::voice::VoiceState,
 ) -> Result<(), Error> {
-
     if state.channel_id.is_none() {
         return Err("No channel id found".into());
     }
