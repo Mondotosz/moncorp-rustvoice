@@ -8,41 +8,26 @@ use crate::{Context, Data, Error};
 async fn get_voice_channel(
     ctx: Context<'_>,
 ) -> Result<serenity::model::channel::GuildChannel, Error> {
-    let guild = ctx.guild();
+    let guild = ctx
+        .guild()
+        .ok_or_else(|| Error::from("Command invoked outside of a guild"))?;
 
-    if guild.is_none() {
-        return Err("Command invoked outside of a guild".into());
-    }
-
-    let guild = guild.unwrap();
     let mut cur_channel = None;
 
     for channel in guild.channels.values() {
         let channel = channel.clone().guild();
 
-        if channel.is_none() {
-            continue;
-        }
-
-        let channel = channel.unwrap();
+        let Some(channel) = channel else {continue;};
 
         if channel.kind != ChannelType::Voice {
             continue;
         }
 
-        let cache = ctx.cache();
+        let Some(cache) = ctx.cache() else {continue;};
 
-        if cache.is_none() {
-            continue;
-        }
+        let Ok(members) = channel.members(cache).await else {continue;};
 
-        let members = channel.members(cache.unwrap()).await;
-
-        if members.is_err() {
-            continue;
-        }
-
-        members.unwrap().iter().find(|m| {
+        members.iter().find(|m| {
             if m.user.id == ctx.author().id {
                 cur_channel = Some(channel.clone());
                 return true;
@@ -135,7 +120,9 @@ pub async fn private(ctx: Context<'_>) -> Result<(), Error> {
         return Ok(());
     }
 
-    let guild = ctx.guild().unwrap();
+    let guild = ctx
+        .guild()
+        .ok_or_else(|| Error::from("Cannot get the guild"))?;
 
     channel
         .edit(&ctx.http(), |c| {
@@ -177,7 +164,9 @@ pub async fn public(ctx: Context<'_>) -> Result<(), Error> {
         return Ok(());
     }
 
-    let guild = ctx.guild().unwrap();
+    let Some(guild) = ctx.guild() else {
+        return Err("Cannot get guild".into());
+    };
 
     channel
         .edit(&ctx.http(), |c| {
@@ -272,12 +261,12 @@ async fn voice_join_handler(
     data: &Data,
     state: &serenity::model::voice::VoiceState,
 ) -> Result<(), Error> {
-    if state.channel_id.is_none() {
+    let Some(id) = state.channel_id else {
         // Happens when the user leaves
         return Ok(());
-    }
+    };
 
-    if PrimaryChannel::exists(state.channel_id.unwrap().into(), &data.db).await? {
+    if PrimaryChannel::exists(id.into(), &data.db).await? {
         handle_primary_channels(ctx, state, data).await?;
     }
 
@@ -289,11 +278,11 @@ async fn voice_leave_handler(
     data: &Data,
     state: &serenity::model::voice::VoiceState,
 ) -> Result<(), Error> {
-    if state.channel_id.is_none() {
-        return Err("No channel id found".into());
-    }
+    let channel_id = state
+        .channel_id
+        .ok_or_else(|| Error::from("No channel id found"))?;
 
-    if TemporaryChannel::exists(state.channel_id.unwrap().into(), &data.db).await? {
+    if TemporaryChannel::exists(channel_id.into(), &data.db).await? {
         handle_temporary_channels(ctx, data, state).await?;
     }
     Ok(())
@@ -304,19 +293,23 @@ async fn handle_primary_channels(
     state: &serenity::model::voice::VoiceState,
     data: &Data,
 ) -> Result<(), Error> {
-    let guild = state.guild_id.unwrap().to_guild_cached(&ctx.cache).unwrap();
-    // Get the category of the primary channel
+    let guild = state
+        .guild_id
+        .ok_or_else(|| Error::from("Cannot get guild"))?
+        .to_guild_cached(&ctx.cache)
+        .ok_or_else(|| Error::from("Cannot get cached guild"))?;
 
+    // Get the category of the primary channel
     let category = state
         .channel_id
         .unwrap_or_default()
         .to_channel_cached(&ctx.cache)
-        .unwrap()
+        .ok_or_else(|| Error::from("Cannot get cached channel"))?
         .guild()
-        .unwrap()
+        .ok_or_else(|| Error::from("Cannot get guild channel"))?
         .parent_id;
-    // Create a temporary channel and move the user to it
 
+    // Create a temporary channel and move the user to it
     let channel = guild
         .create_channel(ctx.http(), |c| {
             let builder = c.name("[General]").kind(ChannelType::Voice);
@@ -335,7 +328,7 @@ async fn handle_primary_channels(
     let _member = state
         .member
         .as_ref()
-        .unwrap()
+        .ok_or_else(|| Error::from("Cannot get user to move"))?
         .edit(&ctx.http, |m| m.voice_channel(channel.id))
         .await;
 
@@ -347,30 +340,28 @@ async fn handle_temporary_channels(
     data: &Data,
     state: &serenity::model::voice::VoiceState,
 ) -> Result<(), Error> {
-    let guild_id = state.guild_id;
+    let guild = state
+        .guild_id
+        .ok_or_else(|| Error::from("No guild id found"))?
+        .to_guild_cached(&ctx.cache)
+        .ok_or_else(|| Error::from("No guild found in cache"))?;
 
-    if guild_id.is_none() {
-        return Err("No guild id found".into());
-    }
-
-    let guild = guild_id.unwrap().to_guild_cached(&ctx.cache);
-
-    if guild.is_none() {
-        return Err("No guild found".into());
-    }
-
-    let guild = guild.unwrap();
-
-    let channel = guild.channels.get(&state.channel_id.unwrap()).unwrap();
+    let channel = guild
+        .channels
+        .get(
+            &state
+                .channel_id
+                .ok_or_else(|| Error::from("Cannot find channel id"))?,
+        )
+        .ok_or_else(|| Error::from("Cannot find channel"))?;
 
     // Check the number of users
     let len = channel
         .clone()
         .guild()
-        .unwrap()
+        .ok_or_else(|| Error::from("Cannot get guild from the channel"))?
         .members(&ctx.cache)
-        .await
-        .unwrap()
+        .await?
         .len();
 
     if len > 0 {
