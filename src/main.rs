@@ -36,7 +36,7 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
 #[tokio::main]
 async fn main() {
     env_logger::init();
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
 
     let db = sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(5)
@@ -74,22 +74,22 @@ async fn main() {
             ],
             ..Default::default()
         },
-        /// The global error handler for all error cases that may occur
+        // The global error handler for all error cases that may occur
         on_error: |error| Box::pin(on_error(error)),
-        /// This code is run before every command
+        // This code is run before every command
         pre_command: |ctx| {
             Box::pin(async move {
                 println!("Executing command {}...", ctx.command().qualified_name);
             })
         },
-        /// This code is run after a command if it was successful (returned Ok)
+        // This code is run after a command if it was successful (returned Ok)
         post_command: |ctx| {
             Box::pin(async move {
                 println!("Executed command {}!", ctx.command().qualified_name);
             })
         },
-        /// Enforce command checks even for owners (enforced by default)
-        /// Set to true to bypass checks, which is useful for testing
+        // Enforce command checks even for owners (enforced by default)
+        // Set to true to bypass checks, which is useful for testing
         skip_checks_for_owners: false,
         event_handler: |_ctx, event: &poise::Event<'_>, _framework, _data| {
             Box::pin(async move {

@@ -23,7 +23,7 @@ async fn get_voice_channel(
             continue;
         }
 
-        let Some(cache) = ctx.cache() else {continue;};
+        let cache = ctx.cache();
 
         let Ok(members) = channel.members(cache).await else {continue;};
 
