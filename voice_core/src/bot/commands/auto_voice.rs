@@ -1,33 +1,31 @@
+use log::info;
+use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{ChannelType, PermissionOverwrite};
 use serenity::http::CacheHttp;
+use serenity::model::channel::GuildChannel;
 use serenity::model::Permissions;
 
-use crate::models::{PrimaryChannel, TemporaryChannel};
-use crate::{Context, Data, Error};
+use crate::bot::{Context, Data, Error};
+use crate::db::models::{PrimaryChannel, TemporaryChannel};
 
-async fn get_voice_channel(
-    ctx: Context<'_>,
-) -> Result<serenity::model::channel::GuildChannel, Error> {
-    let guild = ctx
-        .guild()
-        .ok_or_else(|| Error::from("Command invoked outside of a guild"))?;
+async fn get_voice_channel(ctx: Context<'_>) -> Result<GuildChannel, Error> {
+    // let guild = ctx
+    //     .guild()
+    //     .ok_or_else(|| Error::from("Command invoked outside of a guild"))?;
 
     let mut cur_channel = None;
 
-    for channel in guild.channels.values() {
-        let channel = channel.clone().guild();
+    let guild = ctx
+        .partial_guild()
+        .await
+        .ok_or_else(|| Error::from("Command invoked outside of a guild"))?;
 
-        let Some(channel) = channel else {continue;};
-
+    for (_, channel) in guild.channels(ctx.http()).await? {
         if channel.kind != ChannelType::Voice {
             continue;
         }
 
-        let cache = ctx.cache();
-
-        let Ok(members) = channel.members(cache).await else {continue;};
-
-        members.iter().find(|m| {
+        channel.members(ctx.cache())?.iter().find(|m| {
             if m.user.id == ctx.author().id {
                 cur_channel = Some(channel.clone());
                 return true;
@@ -40,10 +38,9 @@ async fn get_voice_channel(
     if cur_channel.is_none() {
         ctx.say("You must be in a voice channel to use this command.")
             .await?;
-        return Err("User not found in any voice channel".into());
     }
 
-    Ok(cur_channel.unwrap())
+    cur_channel.ok_or("User not found in any voice channel".into())
 }
 
 #[poise::command(
@@ -55,23 +52,24 @@ async fn get_voice_channel(
 pub async fn create(ctx: Context<'_>) -> Result<(), Error> {
     ctx.say("Creating channel...").await?;
 
-    if let Some(guild) = ctx.guild() {
-        let channel = guild
-            .create_channel(ctx.serenity_context().http(), |c| {
-                c.name("➕ New Session").kind(ChannelType::Voice)
-            })
-            .await?;
+    let guild = ctx
+        .partial_guild()
+        .await
+        .ok_or_else(|| Error::from("Command invoked outside of a guild"))?;
 
-        ctx.say(format!(
-            "Created channel <#{}> ({})",
-            channel.id, channel.id
-        ))
-        .await?;
+    let builder = serenity::builder::CreateChannel::new("➕ New Session").kind(ChannelType::Voice);
 
-        let id: i64 = channel.id.into();
+    let channel = guild.create_channel(ctx.http(), builder).await?;
 
-        PrimaryChannel::insert(id, &ctx.data().db).await?;
-    }
+    ctx.say(format!(
+        "Created channel <#{}> ({})",
+        channel.id, channel.id
+    ))
+    .await?;
+
+    let id: i64 = channel.id.into();
+
+    PrimaryChannel::insert(id, &ctx.data().db).await?;
 
     Ok(())
 }
@@ -93,9 +91,9 @@ pub async fn rename(
         return Ok(());
     }
 
-    let result = channel
-        .edit(ctx.http(), |c| c.name(format!("[{}]", &name)))
-        .await;
+    let builder = serenity::builder::EditChannel::new().name(format!("[{}]", &name));
+
+    let result = channel.edit(ctx.http(), builder).await;
 
     match result {
         Ok(_) => {
@@ -121,29 +119,26 @@ pub async fn private(ctx: Context<'_>) -> Result<(), Error> {
     }
 
     let guild = ctx
-        .guild()
-        .ok_or_else(|| Error::from("Cannot get the guild"))?;
+        .partial_guild()
+        .await
+        .ok_or_else(|| Error::from("Command invoked outside of a guild"))?;
 
-    channel
-        .edit(&ctx.http(), |c| {
-            c.permissions(vec![
-                PermissionOverwrite {
-                    allow: Permissions::empty(),
-                    deny: Permissions::CONNECT,
-                    kind: serenity::model::channel::PermissionOverwriteType::Role(
-                        guild.id.0.into(),
-                    ),
-                },
-                PermissionOverwrite {
-                    allow: Permissions::CONNECT,
-                    deny: Permissions::empty(),
-                    kind: serenity::model::channel::PermissionOverwriteType::Member(
-                        ctx.framework().bot_id,
-                    ),
-                },
-            ])
-        })
-        .await?;
+    let builder = serenity::builder::EditChannel::new().permissions(vec![
+        PermissionOverwrite {
+            allow: Permissions::empty(),
+            deny: Permissions::CONNECT,
+            kind: serenity::model::channel::PermissionOverwriteType::Role(serenity::RoleId::new(
+                guild.id.into(),
+            )),
+        },
+        PermissionOverwrite {
+            allow: Permissions::CONNECT,
+            deny: Permissions::empty(),
+            kind: serenity::model::channel::PermissionOverwriteType::Member(ctx.framework().bot_id),
+        },
+    ]);
+
+    channel.edit(&ctx.http(), builder).await?;
 
     ctx.say("Making channel private...").await?;
 
@@ -164,19 +159,20 @@ pub async fn public(ctx: Context<'_>) -> Result<(), Error> {
         return Ok(());
     }
 
-    let Some(guild) = ctx.guild() else {
-        return Err("Cannot get guild".into());
-    };
+    let guild = ctx
+        .partial_guild()
+        .await
+        .ok_or_else(|| Error::from("Command invoked outside of a guild"))?;
 
-    channel
-        .edit(&ctx.http(), |c| {
-            c.permissions(vec![PermissionOverwrite {
-                allow: Permissions::empty(),
-                deny: Permissions::empty(),
-                kind: serenity::model::channel::PermissionOverwriteType::Role(guild.id.0.into()),
-            }])
-        })
-        .await?;
+    let builder = serenity::builder::EditChannel::new().permissions(vec![PermissionOverwrite {
+        allow: Permissions::empty(),
+        deny: Permissions::empty(),
+        kind: serenity::model::channel::PermissionOverwriteType::Role(serenity::RoleId::new(
+            guild.id.into(),
+        )),
+    }]);
+
+    channel.edit(&ctx.http(), builder).await?;
 
     ctx.say("Making channel public...").await?;
 
@@ -193,7 +189,7 @@ pub async fn limit(
     #[description = "The number of users"]
     #[max = 99]
     #[min = 1]
-    number: u64,
+    number: u32,
 ) -> Result<(), Error> {
     let mut channel = get_voice_channel(ctx).await?;
 
@@ -203,11 +199,9 @@ pub async fn limit(
         return Ok(());
     }
 
-    if channel
-        .edit(ctx.http(), |c| c.user_limit(number))
-        .await
-        .is_err()
-    {
+    let builder = serenity::builder::EditChannel::new().user_limit(number);
+
+    if channel.edit(ctx.http(), builder).await.is_err() {
         return Err("Failed to limit channel".into());
     }
 
@@ -231,7 +225,9 @@ pub async fn unlimit(ctx: Context<'_>) -> Result<(), Error> {
         return Ok(());
     }
 
-    if channel.edit(ctx.http(), |c| c.user_limit(0)).await.is_err() {
+    let builder = serenity::builder::EditChannel::new().user_limit(0);
+
+    if channel.edit(ctx.http(), builder).await.is_err() {
         return Err("Failed to limit channel".into());
     }
 
@@ -293,43 +289,64 @@ async fn handle_primary_channels(
     state: &serenity::model::voice::VoiceState,
     data: &Data,
 ) -> Result<(), Error> {
+    // let guild = state
+    //     .guild_id
+    //     .ok_or_else(|| Error::from("Cannot get guild"))?
+    //     .to_guild_cached(&ctx.cache)
+    //     .ok_or_else(|| Error::from("Cannot get cached guild"))?;
+
+    let id = &&state
+        .channel_id
+        .ok_or_else(|| Error::from("Cannot find channel id"))?;
+
     let guild = state
         .guild_id
-        .ok_or_else(|| Error::from("Cannot get guild"))?
-        .to_guild_cached(&ctx.cache)
-        .ok_or_else(|| Error::from("Cannot get cached guild"))?;
+        .ok_or_else(|| Error::from("No guild id found"))?
+        .to_partial_guild(&ctx.http())
+        .await?;
+
+    let channels = guild.channels(&ctx.http()).await?;
+
+    let (_, primary_channel) = channels
+        .iter()
+        .find(|(c, _)| c == id)
+        .ok_or_else(|| Error::from("Cannot find the channel which triggered the event"))?;
 
     // Get the category of the primary channel
-    let category = state
-        .channel_id
-        .unwrap_or_default()
-        .to_channel_cached(&ctx.cache)
-        .ok_or_else(|| Error::from("Cannot get cached channel"))?
-        .guild()
-        .ok_or_else(|| Error::from("Cannot get guild channel"))?
-        .parent_id;
+
+    let category = primary_channel.parent_id;
+
+    // let category = state
+    //     .channel_id
+    //     .unwrap_or_default()
+    //     .to_channel_cached(&ctx.cache)
+    //     .ok_or_else(|| Error::from("Cannot get cached channel"))?
+    //     .guild()
+    //     .ok_or_else(|| Error::from("Cannot get guild channel"))?
+    //     .parent_id;
 
     // Create a temporary channel and move the user to it
-    let channel = guild
-        .create_channel(ctx.http(), |c| {
-            let builder = c.name("[General]").kind(ChannelType::Voice);
 
-            match category {
-                Some(category) => builder.category(category),
-                None => builder,
-            }
-        })
-        .await?;
+    let mut builder = serenity::builder::CreateChannel::new("[General]").kind(ChannelType::Voice);
+
+    if let Some(category) = category {
+        builder = builder.category(category);
+    }
+
+    let channel = guild.create_channel(ctx.http(), builder).await?;
 
     // Save the new channel to the database
     TemporaryChannel::insert(channel.id.into(), &data.db).await?;
 
     // Move the user to the new channel
+
+    let builder = serenity::builder::EditMember::new().voice_channel(channel.id);
+
     let _member = state
         .member
-        .as_ref()
+        .clone()
         .ok_or_else(|| Error::from("Cannot get user to move"))?
-        .edit(&ctx.http, |m| m.voice_channel(channel.id))
+        .edit(&ctx.http, builder)
         .await;
 
     Ok(())
@@ -340,39 +357,65 @@ async fn handle_temporary_channels(
     data: &Data,
     state: &serenity::model::voice::VoiceState,
 ) -> Result<(), Error> {
+    // let guild = state
+    //     .guild_id
+    //     .ok_or_else(|| Error::from("No guild id found"))?
+    //     .to_guild_cached(&ctx.cache)
+    //     .ok_or_else(|| Error::from("No guild found in cache"))?;
+
+    // let guild = ctx
+    //     .partial_guild()
+    //     .await
+    //     .ok_or_else(|| Error::from("Command invoked outside of a guild"))?;
+
+    info!("Checkpoint 1");
+
+    let id = &&state
+        .channel_id
+        .ok_or_else(|| Error::from("Cannot find channel id"))?;
+
+    info!("Checkpoint 2");
     let guild = state
         .guild_id
         .ok_or_else(|| Error::from("No guild id found"))?
-        .to_guild_cached(&ctx.cache)
-        .ok_or_else(|| Error::from("No guild found in cache"))?;
+        .to_partial_guild(&ctx.http())
+        .await?;
 
-    let channel = guild
-        .channels
-        .get(
-            &state
-                .channel_id
-                .ok_or_else(|| Error::from("Cannot find channel id"))?,
-        )
-        .ok_or_else(|| Error::from("Cannot find channel"))?;
+    info!("Checkpoint 3");
+    let channels = guild.channels(&ctx.http()).await?;
+
+    info!("Checkpoint 4");
+    let (_, channel) = channels
+        .iter()
+        .find(|(c, _)| c == id)
+        .ok_or_else(|| Error::from("Cannot find the channel which triggered the event"))?;
+
+    info!("Checkpoint 5");
+    let len = channel
+        .member_count
+        .ok_or_else(|| Error::from("Unable to get the number of users in the channel"))?;
 
     // Check the number of users
-    let len = channel
-        .clone()
-        .guild()
-        .ok_or_else(|| Error::from("Cannot get guild from the channel"))?
-        .members(&ctx.cache)
-        .await?
-        .len();
+    // let len = channel
+    //     .clone()
+    //     .guild()
+    //     .ok_or_else(|| Error::from("Cannot get guild from the channel"))?
+    //     .members(&ctx.cache)
+    //     .await?
+    //     .len();
 
+    info!("Checkpoint 6");
     if len > 0 {
         return Ok(());
     }
+
+    info!("number of users {len}");
 
     // Delete if empty
     channel.delete(&ctx.http).await?;
 
     // Update the database
-    TemporaryChannel::delete(channel.id().into(), &data.db).await?;
+    TemporaryChannel::delete(channel.id.into(), &data.db).await?;
 
     Ok(())
 }
