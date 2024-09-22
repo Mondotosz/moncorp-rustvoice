@@ -1,0 +1,7 @@
+# Ignore everything
+*
+# Allow
+!/src
+!/migrations
+!/Cargo.lock
+!/Cargo.toml
