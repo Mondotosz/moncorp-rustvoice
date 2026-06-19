@@ -143,3 +143,26 @@ Copy `.env.example` to `.env`:
 | `DISCORD_SERVER_ID` | Guild snowflake (used for dev guild-scoped command registration)        |
 | `DATABASE_URL`      | `sqlite:./db.sqlite` or an absolute path                                |
 | `IPC_SOCKET_PATH`   | Unix socket path; defaults to `$XDG_RUNTIME_DIR/rustvoice.sock` (see `ipc::default_socket_path`) |
+
+## Docker
+
+```bash
+# Build locally
+docker build -t rustvoice .
+
+# Run with compose (reads .env from the same directory)
+docker compose up -d
+
+# Check health
+docker compose ps
+```
+
+**`compose.yaml`** mounts a named volume at `/data` and sets `DATABASE_URL=sqlite:/data/db.sqlite`.
+Migrations run automatically on every startup — no separate init step needed.
+The healthcheck uses `rustvoice daemon status` which connects to the IPC socket the bot exposes even in foreground mode (`rustvoice run`).
+
+## CI/CD
+
+`.github/workflows/docker.yml` builds and pushes to GHCR on every push to `main` or a `v*` tag.
+Tags applied: `latest` and the version from `crates/rustvoice/Cargo.toml`.
+`GITHUB_TOKEN` with `packages: write` is the only credential required — no manual secrets needed for a personal repo.
