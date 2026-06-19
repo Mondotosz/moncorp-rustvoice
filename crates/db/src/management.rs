@@ -8,7 +8,7 @@ pub async fn status(db: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {
     let total = migrations.len();
     let applied = migrations.iter().filter(|m| m.status() == sea_orm_migration::MigrationStatus::Applied).count();
 
-    println!("{:<44} {}", "Migration", "Status");
+    println!("{:<44} Status", "Migration");
     println!("{}", "-".repeat(54));
     for m in &migrations {
         println!("{:<44} {}", m.name(), m.status());

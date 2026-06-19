@@ -34,6 +34,16 @@ pub async fn count_all(db: &DatabaseConnection) -> Result<u64, DbErr> {
     TemporaryChannel::find().count(db).await
 }
 
+pub async fn list_by_guild(
+    guild_id: i64,
+    db: &DatabaseConnection,
+) -> Result<Vec<temporary_channel::Model>, DbErr> {
+    TemporaryChannel::find()
+        .filter(temporary_channel::Column::GuildId.eq(guild_id))
+        .all(db)
+        .await
+}
+
 pub async fn count_by_guild(guild_id: i64, db: &DatabaseConnection) -> Result<u64, DbErr> {
     TemporaryChannel::find()
         .filter(temporary_channel::Column::GuildId.eq(guild_id))

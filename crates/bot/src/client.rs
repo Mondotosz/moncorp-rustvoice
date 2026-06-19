@@ -1,6 +1,8 @@
+use std::sync::{Arc, OnceLock};
+
 use poise::serenity_prelude as serenity;
 
-use crate::{Data, Error};
+use crate::{BotContext, Data, Error};
 
 pub fn all_commands() -> Vec<poise::Command<Data, Error>> {
     vec![
@@ -13,7 +15,11 @@ pub fn all_commands() -> Vec<poise::Command<Data, Error>> {
     ]
 }
 
-pub async fn build_and_run(token: String, data: Data) -> Result<(), Error> {
+pub async fn build_and_run(
+    token: String,
+    data: Data,
+    bot_ctx: Arc<OnceLock<BotContext>>,
+) -> Result<(), Error> {
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: all_commands(),
@@ -31,6 +37,12 @@ pub async fn build_and_run(token: String, data: Data) -> Result<(), Error> {
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
                 register_commands_on_startup(ctx, framework).await?;
+                bot_ctx
+                    .set(BotContext {
+                        http: ctx.http.clone(),
+                        cache: ctx.cache.clone(),
+                    })
+                    .ok();
                 tracing::info!("Bot ready");
                 Ok(data)
             })

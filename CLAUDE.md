@@ -104,6 +104,27 @@ user + insert DB row. Leave a temp channel → if empty, delete Discord channel 
 delete DB row. `activity::suggested_name` is called on every membership change
 and renames the channel if ≥ 50 % of members share a game.
 
+**Daemon**: `rustvoice daemon start` forks before Tokio starts (in `main()`,
+not inside `Cli::run()`). This is intentional — forking a multi-threaded Tokio
+runtime is unsafe. The child creates a fresh runtime and runs the bot. The PID
+file and socket path both resolve via the same priority: `IPC_SOCKET_PATH` env /
+`XDG_RUNTIME_DIR` / `~/.local/run` / `/tmp`; see `ipc::default_socket_path()`
+and `ipc::default_pid_path()`. `daemon stop` sends SIGTERM by reading the PID
+file.
+
+**Startup cleanup**: On reconnect, `events/mod.rs` handles each `GuildCreate`
+event (guard `is_new != Some(true)`) and calls `startup_cleanup`. It checks every
+`temporary_channel` DB row for that guild: if the Discord channel no longer
+exists → remove DB row only; if it exists but is empty (per `guild.voice_states`)
+→ delete the channel and the DB row. This handles channels that went empty while
+the bot was offline.
+
+**IPC cleanup**: `rustvoice cleanup` → `Request::Cleanup` → `ipc_server::cleanup`.
+Requires the bot to be ready (uses `Arc<OnceLock<BotContext>>`). For each
+`temporary_channel` row, performs an HTTP `get_channel` check; stale entries are
+removed from DB. Existing empty channels are deleted from Discord and DB using the
+cache for member counts.
+
 **IPC**: Newline-delimited JSON over a Unix socket (one request line → one
 response line). The daemon side (`bot/src/ipc_server.rs`) listens; CLI
 subcommands (`daemon status`, `stats`, `cleanup`) connect as clients via
@@ -121,4 +142,4 @@ Copy `.env.example` to `.env`:
 | `DISCORD_TOKEN`     | Bot token from Discord Developer Portal                                 |
 | `DISCORD_SERVER_ID` | Guild snowflake (used for dev guild-scoped command registration)        |
 | `DATABASE_URL`      | `sqlite:./db.sqlite` or an absolute path                                |
-| `IPC_SOCKET_PATH`   | Unix socket path; defaults to `~/.local/share/rustvoice/rustvoice.sock` |
+| `IPC_SOCKET_PATH`   | Unix socket path; defaults to `$XDG_RUNTIME_DIR/rustvoice.sock` (see `ipc::default_socket_path`) |

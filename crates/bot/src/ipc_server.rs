@@ -1,8 +1,18 @@
+use std::sync::{Arc, OnceLock};
+
+use poise::serenity_prelude as serenity;
+
 use db::DatabaseConnection;
 
+use crate::BotContext;
 use ipc::protocol::{Request, Response};
 
-pub async fn serve(socket_path: String, db: DatabaseConnection, start_time: std::time::Instant) {
+pub async fn serve(
+    socket_path: String,
+    db: DatabaseConnection,
+    start_time: std::time::Instant,
+    bot_ctx: Arc<OnceLock<BotContext>>,
+) {
     let listener = match ipc::server::listen(&socket_path).await {
         Ok(l) => {
             tracing::info!("IPC socket: {socket_path}");
@@ -16,12 +26,18 @@ pub async fn serve(socket_path: String, db: DatabaseConnection, start_time: std:
 
     let _ = ipc::server::handle_connections(listener, move |request| {
         let db = db.clone();
-        async move { handle(request, &db, start_time).await }
+        let bot_ctx = bot_ctx.clone();
+        async move { handle(request, &db, start_time, &bot_ctx).await }
     })
     .await;
 }
 
-async fn handle(request: Request, db: &DatabaseConnection, start_time: std::time::Instant) -> Response {
+async fn handle(
+    request: Request,
+    db: &DatabaseConnection,
+    start_time: std::time::Instant,
+    bot_ctx: &Arc<OnceLock<BotContext>>,
+) -> Response {
     match request {
         Request::Status => Response::Status {
             uptime_secs: start_time.elapsed().as_secs(),
@@ -30,7 +46,7 @@ async fn handle(request: Request, db: &DatabaseConnection, start_time: std::time
             Ok((guilds, active_channels)) => Response::Stats { guilds, active_channels },
             Err(e) => Response::Error(e.to_string()),
         },
-        Request::Cleanup => match cleanup(db).await {
+        Request::Cleanup => match cleanup(db, bot_ctx).await {
             Ok(removed) => Response::Cleanup { removed },
             Err(e) => Response::Error(e.to_string()),
         },
@@ -43,13 +59,53 @@ async fn stats(db: &DatabaseConnection) -> Result<(u64, u64), crate::Error> {
     Ok((guilds, active_channels))
 }
 
-/// Removes all temporary_channel rows whose Discord channels were deleted without the bot noticing.
-/// A full Discord-verified cleanup (checking via HTTP) can be added when needed.
-async fn cleanup(db: &DatabaseConnection) -> Result<u64, crate::Error> {
+/// Removes temporary_channel rows for channels that no longer exist on Discord,
+/// and deletes Discord channels that are currently empty (bot missed leave events).
+async fn cleanup(
+    db: &DatabaseConnection,
+    bot_ctx: &Arc<OnceLock<BotContext>>,
+) -> Result<u64, crate::Error> {
+    let ctx = bot_ctx
+        .get()
+        .ok_or("Bot not ready yet — try again in a moment")?;
+
     let channels = db::repositories::temporary_channel::list_all(db).await?;
-    let count = channels.len() as u64;
+    let mut removed = 0u64;
+
     for channel in channels {
-        db::repositories::temporary_channel::delete(channel.id, db).await?;
+        let channel_id = serenity::ChannelId::new(channel.id as u64);
+        let guild_id = serenity::GuildId::new(channel.guild_id as u64);
+
+        match ctx.http.get_channel(channel_id).await {
+            Err(_) => {
+                // Channel is gone from Discord — remove DB row.
+                db::repositories::temporary_channel::delete(channel.id, db).await?;
+                removed += 1;
+                tracing::debug!("Cleanup: removed stale DB entry for channel {channel_id}");
+            }
+            Ok(_) => {
+                // Channel still exists — delete if empty per the cache.
+                let is_empty = ctx
+                    .cache
+                    .guild(guild_id)
+                    .map(|g| {
+                        !g.voice_states
+                            .values()
+                            .any(|vs| vs.channel_id == Some(channel_id))
+                    })
+                    .unwrap_or(false);
+
+                if is_empty {
+                    let _ = ctx.http.delete_channel(channel_id, None).await;
+                    db::repositories::temporary_channel::delete(channel.id, db).await?;
+                    removed += 1;
+                    tracing::debug!(
+                        "Cleanup: deleted empty temp channel {channel_id} in guild {guild_id}"
+                    );
+                }
+            }
+        }
     }
-    Ok(count)
+
+    Ok(removed)
 }

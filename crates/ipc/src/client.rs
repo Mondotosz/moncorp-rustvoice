@@ -10,10 +10,21 @@ pub struct IpcClient {
 
 impl IpcClient {
     pub async fn connect(socket_path: &str) -> std::io::Result<Self> {
-        let (read, write) = UnixStream::connect(socket_path).await?.into_split();
-        Ok(Self {
-            read: BufReader::new(read),
-            write,
+        UnixStream::connect(socket_path).await.map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound
+                || e.kind() == std::io::ErrorKind::ConnectionRefused
+            {
+                std::io::Error::new(
+                    e.kind(),
+                    format!("Bot is not running (socket not found at {socket_path})"),
+                )
+            } else {
+                e
+            }
+        })
+        .map(|stream| {
+            let (read, write) = stream.into_split();
+            Self { read: BufReader::new(read), write }
         })
     }
 

@@ -65,6 +65,8 @@ struct Field {
     value: String,
     snapshot: String, // restored on Esc in edit mode
     masked: bool,
+    /// If true and value is empty, the key is omitted from .env entirely.
+    optional: bool,
 }
 
 enum Mode {
@@ -82,16 +84,16 @@ struct App {
 impl App {
     fn new() -> Self {
         let env = env_read(".env");
-        let mk = |key: &'static str, label: &'static str, default: &str, masked: bool| {
+        let mk = |key: &'static str, label: &'static str, default: &str, masked: bool, optional: bool| {
             let value = env.get(key).cloned().unwrap_or_else(|| default.to_owned());
-            Field { key, label, snapshot: value.clone(), value, masked }
+            Field { key, label, snapshot: value.clone(), value, masked, optional }
         };
         Self {
             fields: vec![
-                mk("DISCORD_TOKEN",    "Discord Token",    "",                   true),
-                mk("DISCORD_SERVER_ID","Discord Server ID","",                   false),
-                mk("DATABASE_URL",     "Database URL",     "sqlite:./db.sqlite", false),
-                mk("IPC_SOCKET_PATH",  "IPC Socket Path",  "",                   false),
+                mk("DISCORD_TOKEN",    "Discord Token",    "",                   true,  false),
+                mk("DISCORD_SERVER_ID","Discord Server ID","",                   false, true),
+                mk("DATABASE_URL",     "Database URL",     "sqlite:./db.sqlite", false, false),
+                mk("IPC_SOCKET_PATH",  "IPC Socket Path",  "",                   false, true),
             ],
             selected: 0,
             mode: Mode::Browse,
@@ -430,6 +432,9 @@ fn env_write(path: &str, fields: &[Field]) {
         .collect();
 
     for f in fields {
+        if f.optional && f.value.is_empty() {
+            continue;
+        }
         lines.push(format!("{}=\"{}\"", f.key, f.value));
     }
 

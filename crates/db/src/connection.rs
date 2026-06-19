@@ -59,6 +59,7 @@ fn ensure_sqlite_dir(url: &str) -> Result<(), DbErr> {
     if !path.exists() {
         std::fs::OpenOptions::new()
             .create(true)
+            .truncate(false)
             .write(true)
             .open(path)
             .map_err(|e| DbErr::Custom(format!("cannot create database file: {e}")))?;

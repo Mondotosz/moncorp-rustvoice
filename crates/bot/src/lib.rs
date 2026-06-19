@@ -1,3 +1,5 @@
+use std::sync::{Arc, OnceLock};
+
 use poise::serenity_prelude as serenity;
 
 use db::DatabaseConnection;
@@ -7,6 +9,13 @@ pub mod client;
 pub mod commands;
 pub mod events;
 pub mod ipc_server;
+
+/// HTTP + cache handles shared between the IPC server and event handlers.
+/// Populated once the bot fires its Ready event.
+pub struct BotContext {
+    pub http: Arc<serenity::Http>,
+    pub cache: Arc<serenity::Cache>,
+}
 
 pub struct Data {
     pub db: DatabaseConnection,
@@ -18,11 +27,13 @@ pub type Context<'a> = poise::Context<'a, Data, Error>;
 
 pub async fn run(token: String, db: DatabaseConnection, socket_path: String) -> Result<(), Error> {
     let start_time = std::time::Instant::now();
+    let bot_ctx: Arc<OnceLock<BotContext>> = Arc::new(OnceLock::new());
 
     let ipc_db = db.clone();
-    tokio::spawn(ipc_server::serve(socket_path, ipc_db, start_time));
+    let ipc_bot_ctx = bot_ctx.clone();
+    tokio::spawn(ipc_server::serve(socket_path, ipc_db, start_time, ipc_bot_ctx));
 
-    client::build_and_run(token, Data { db, start_time }).await
+    client::build_and_run(token, Data { db, start_time }, bot_ctx).await
 }
 
 /// Register slash commands without starting the full bot.

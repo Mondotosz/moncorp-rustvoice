@@ -89,9 +89,6 @@ pub enum DbAction {
 
 impl Cli {
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        init_tracing(self.verbose);
-        dotenvy::dotenv().ok();
-
         match self.command {
             Command::Setup { action } => commands::setup::run(action).await,
             Command::Run => commands::run::run().await,
@@ -104,7 +101,7 @@ impl Cli {
     }
 }
 
-fn init_tracing(verbose: u8) {
+pub fn init_tracing(verbose: u8) {
     use tracing::Level;
     use tracing_subscriber::EnvFilter;
 
