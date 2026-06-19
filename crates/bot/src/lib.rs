@@ -17,21 +17,30 @@ pub struct BotContext {
     pub cache: Arc<serenity::Cache>,
 }
 
+/// Shared state available to every poise command through the bot's [`Context`].
 pub struct Data {
     pub db: DatabaseConnection,
     pub start_time: std::time::Instant,
 }
 
+/// Boxed, thread-safe error type returned by all command functions.
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
+/// Poise context for guild-only slash commands, parameterised with [`Data`] and [`Error`].
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 
+/// Start the Discord bot and IPC server, blocking until shutdown.
 pub async fn run(token: String, db: DatabaseConnection, socket_path: String) -> Result<(), Error> {
     let start_time = std::time::Instant::now();
     let bot_ctx: Arc<OnceLock<BotContext>> = Arc::new(OnceLock::new());
 
     let ipc_db = db.clone();
     let ipc_bot_ctx = bot_ctx.clone();
-    tokio::spawn(ipc_server::serve(socket_path, ipc_db, start_time, ipc_bot_ctx));
+    tokio::spawn(ipc_server::serve(
+        socket_path,
+        ipc_db,
+        start_time,
+        ipc_bot_ctx,
+    ));
 
     client::build_and_run(token, Data { db, start_time }, bot_ctx).await
 }

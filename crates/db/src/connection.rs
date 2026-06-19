@@ -35,9 +35,9 @@ fn ensure_sqlite_dir(url: &str) -> Result<(), DbErr> {
     // slashes (e.g. "sqlite:///path") also indicate absolute, but strip down to one. Zero
     // leading slashes = relative (e.g. "sqlite:./foo" or "sqlite:foo").
     let path_str = match after_scheme.chars().take_while(|&c| c == '/').count() {
-        0 => after_scheme.to_owned(),                 // relative: "./db.sqlite"
-        1 => after_scheme.to_owned(),                 // "/absolute/path"
-        n => after_scheme[n - 1..].to_owned(),        // "///abs" → "/abs"
+        0 => after_scheme.to_owned(),          // relative: "./db.sqlite"
+        1 => after_scheme.to_owned(),          // "/absolute/path"
+        n => after_scheme[n - 1..].to_owned(), // "///abs" → "/abs"
     };
 
     // Skip special targets (:memory: or empty)

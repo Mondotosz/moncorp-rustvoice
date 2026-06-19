@@ -21,8 +21,7 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 pub async fn run(action: Option<SetupAction>) -> Result<(), Error> {
     match action {
         Some(SetupAction::Db) => {
-            let url = std::env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "sqlite:./db.sqlite".into());
+            let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:./db.sqlite".into());
             return prompt_db_init(&url).await;
         }
         None => {}
@@ -84,16 +83,33 @@ struct App {
 impl App {
     fn new() -> Self {
         let env = env_read(".env");
-        let mk = |key: &'static str, label: &'static str, default: &str, masked: bool, optional: bool| {
+        let mk = |key: &'static str,
+                  label: &'static str,
+                  default: &str,
+                  masked: bool,
+                  optional: bool| {
             let value = env.get(key).cloned().unwrap_or_else(|| default.to_owned());
-            Field { key, label, snapshot: value.clone(), value, masked, optional }
+            Field {
+                key,
+                label,
+                snapshot: value.clone(),
+                value,
+                masked,
+                optional,
+            }
         };
         Self {
             fields: vec![
-                mk("DISCORD_TOKEN",    "Discord Token",    "",                   true,  false),
-                mk("DISCORD_SERVER_ID","Discord Server ID","",                   false, true),
-                mk("DATABASE_URL",     "Database URL",     "sqlite:./db.sqlite", false, false),
-                mk("IPC_SOCKET_PATH",  "IPC Socket Path",  "",                   false, true),
+                mk("DISCORD_TOKEN", "Discord Token", "", true, false),
+                mk("DISCORD_SERVER_ID", "Discord Server ID", "", false, true),
+                mk(
+                    "DATABASE_URL",
+                    "Database URL",
+                    "sqlite:./db.sqlite",
+                    false,
+                    false,
+                ),
+                mk("IPC_SOCKET_PATH", "IPC Socket Path", "", false, true),
             ],
             selected: 0,
             mode: Mode::Browse,
@@ -140,7 +156,9 @@ fn run_tui<B: ratatui::backend::Backend>(
     loop {
         terminal.draw(|f| draw(f, app))?;
 
-        let Event::Key(key) = event::read()? else { continue };
+        let Event::Key(key) = event::read()? else {
+            continue;
+        };
 
         // Snapshot before any mutable borrow of `app`.
         let cur = app.cursor();
@@ -223,7 +241,9 @@ fn run_tui<B: ratatui::backend::Backend>(
                     if !m.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
                 {
                     app.fields[app.selected].value.insert(cur, c);
-                    app.mode = Mode::Edit { cursor: cur + c.len_utf8() };
+                    app.mode = Mode::Edit {
+                        cursor: cur + c.len_utf8(),
+                    };
                 }
 
                 _ => {}
@@ -291,7 +311,10 @@ fn draw(f: &mut ratatui::Frame, app: &App) {
     );
 
     // Inside the border, with 1-char horizontal padding
-    let inner = panel.inner(Margin { vertical: 1, horizontal: 2 });
+    let inner = panel.inner(Margin {
+        vertical: 1,
+        horizontal: 2,
+    });
     let value_w = inner.width.saturating_sub(LABEL_COL);
 
     let editing_cursor = app.cursor();
@@ -301,7 +324,12 @@ fn draw(f: &mut ratatui::Frame, app: &App) {
         let is_edit = is_sel && editing_cursor.is_some();
 
         let y = inner.y + i as u16;
-        let row_rect = Rect { x: inner.x, y, width: inner.width, height: 1 };
+        let row_rect = Rect {
+            x: inner.x,
+            y,
+            width: inner.width,
+            height: 1,
+        };
 
         // Raw string shown in the value column
         let raw: String = if field.masked && !field.value.is_empty() && !is_edit {
@@ -317,14 +345,19 @@ fn draw(f: &mut ratatui::Frame, app: &App) {
             // Keep cursor at most at the last visible column
             let scroll = cur.saturating_sub(w.saturating_sub(1));
             let visible: String = raw.chars().skip(scroll).take(w).collect();
-            (format!("{:<w$}", visible, w = w), Some((cur - scroll) as u16))
+            (
+                format!("{:<w$}", visible, w = w),
+                Some((cur - scroll) as u16),
+            )
         } else {
             let visible: String = raw.chars().take(value_w as usize).collect();
             (format!("{:<w$}", visible, w = value_w as usize), None)
         };
 
         let prefix_style = if is_sel {
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::DarkGray)
         };
@@ -355,7 +388,12 @@ fn draw(f: &mut ratatui::Frame, app: &App) {
 
     // Help line at the bottom of the inner area
     let help_y = inner.y + inner.height.saturating_sub(1);
-    let help_rect = Rect { x: inner.x, y: help_y, width: inner.width, height: 1 };
+    let help_rect = Rect {
+        x: inner.x,
+        y: help_y,
+        width: inner.width,
+        height: 1,
+    };
     let help = if editing_cursor.is_some() {
         "Esc cancel  Enter/Tab next field  Ctrl+S save"
     } else {
@@ -372,11 +410,7 @@ fn draw(f: &mut ratatui::Frame, app: &App) {
 // ─── Char-boundary helpers ─────────────────────────────────────────────────
 
 fn prev_char_boundary(s: &str, pos: usize) -> usize {
-    s[..pos]
-        .char_indices()
-        .last()
-        .map(|(i, _)| i)
-        .unwrap_or(0)
+    s[..pos].char_indices().last().map(|(i, _)| i).unwrap_or(0)
 }
 
 fn next_char_boundary(s: &str, pos: usize) -> usize {

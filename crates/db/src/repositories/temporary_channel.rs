@@ -1,4 +1,6 @@
-use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, QueryFilter, Set};
+use sea_orm::{
+    ColumnTrait, DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, QueryFilter, Set,
+};
 
 use crate::entities::temporary_channel::{self, Entity as TemporaryChannel};
 

@@ -3,31 +3,39 @@ use tokio::net::UnixStream;
 
 use crate::protocol::{Request, Response};
 
+/// Async Unix socket client for communicating with the running bot daemon.
 pub struct IpcClient {
     read: BufReader<tokio::net::unix::OwnedReadHalf>,
     write: tokio::net::unix::OwnedWriteHalf,
 }
 
 impl IpcClient {
+    /// Connect to the bot daemon's Unix socket at `socket_path`.
     pub async fn connect(socket_path: &str) -> std::io::Result<Self> {
-        UnixStream::connect(socket_path).await.map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound
-                || e.kind() == std::io::ErrorKind::ConnectionRefused
-            {
-                std::io::Error::new(
-                    e.kind(),
-                    format!("Bot is not running (socket not found at {socket_path})"),
-                )
-            } else {
-                e
-            }
-        })
-        .map(|stream| {
-            let (read, write) = stream.into_split();
-            Self { read: BufReader::new(read), write }
-        })
+        UnixStream::connect(socket_path)
+            .await
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound
+                    || e.kind() == std::io::ErrorKind::ConnectionRefused
+                {
+                    std::io::Error::new(
+                        e.kind(),
+                        format!("Bot is not running (socket not found at {socket_path})"),
+                    )
+                } else {
+                    e
+                }
+            })
+            .map(|stream| {
+                let (read, write) = stream.into_split();
+                Self {
+                    read: BufReader::new(read),
+                    write,
+                }
+            })
     }
 
+    /// Send a [`Request`] to the daemon and wait for its [`Response`].
     pub async fn send(
         &mut self,
         request: Request,

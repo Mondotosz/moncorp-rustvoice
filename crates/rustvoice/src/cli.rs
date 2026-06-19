@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 
 use crate::commands;
 
+/// Top-level CLI entry point for the `rustvoice` binary.
 #[derive(Parser)]
 #[command(name = "rustvoice", about = "Dynamic voice channel bot for Discord")]
 pub struct Cli {
@@ -13,6 +14,7 @@ pub struct Cli {
     pub command: Command,
 }
 
+/// Available subcommands for the `rustvoice` CLI.
 #[derive(Subcommand)]
 pub enum Command {
     /// Interactive environment setup (token, database, etc.)
@@ -47,12 +49,14 @@ pub enum Command {
     Cleanup,
 }
 
+/// Actions available under the `setup` subcommand.
 #[derive(Subcommand)]
 pub enum SetupAction {
     /// Initialize or migrate the database only
     Db,
 }
 
+/// Actions available under the `daemon` subcommand.
 #[derive(Subcommand)]
 pub enum DaemonAction {
     /// Start the bot as a background daemon
@@ -63,6 +67,7 @@ pub enum DaemonAction {
     Status,
 }
 
+/// Actions available under the `db` subcommand.
 #[derive(Subcommand)]
 pub enum DbAction {
     /// Show the status of all migrations (applied and pending)
@@ -101,6 +106,7 @@ impl Cli {
     }
 }
 
+/// Initialise the `tracing` subscriber, with verbosity driven by the `-v` count.
 pub fn init_tracing(verbose: u8) {
     use tracing::Level;
     use tracing_subscriber::EnvFilter;
@@ -114,8 +120,6 @@ pub fn init_tracing(verbose: u8) {
     };
 
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::from_default_env().add_directive(level.into()),
-        )
+        .with_env_filter(EnvFilter::from_default_env().add_directive(level.into()))
         .init();
 }

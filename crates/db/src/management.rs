@@ -6,7 +6,10 @@ use crate::migrator::Migrator;
 pub async fn status(db: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {
     let migrations = Migrator::get_migration_with_status(db).await?;
     let total = migrations.len();
-    let applied = migrations.iter().filter(|m| m.status() == sea_orm_migration::MigrationStatus::Applied).count();
+    let applied = migrations
+        .iter()
+        .filter(|m| m.status() == sea_orm_migration::MigrationStatus::Applied)
+        .count();
 
     println!("{:<44} Status", "Migration");
     println!("{}", "-".repeat(54));

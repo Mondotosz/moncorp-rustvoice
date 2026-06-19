@@ -12,7 +12,10 @@ fn main() {
 
     // `daemon start` must daemonize BEFORE the Tokio runtime is created.
     // Forking inside a running multi-threaded runtime is unsafe.
-    if let Command::Daemon { action: DaemonAction::Start } = &cli.command {
+    if let Command::Daemon {
+        action: DaemonAction::Start,
+    } = &cli.command
+    {
         let pid_path = ipc::default_pid_path();
         let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/"));
 

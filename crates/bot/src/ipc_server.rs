@@ -43,7 +43,10 @@ async fn handle(
             uptime_secs: start_time.elapsed().as_secs(),
         },
         Request::Stats => match stats(db).await {
-            Ok((guilds, active_channels)) => Response::Stats { guilds, active_channels },
+            Ok((guilds, active_channels)) => Response::Stats {
+                guilds,
+                active_channels,
+            },
             Err(e) => Response::Error(e.to_string()),
         },
         Request::Cleanup => match cleanup(db, bot_ctx).await {
