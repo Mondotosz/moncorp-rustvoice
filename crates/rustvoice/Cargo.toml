@@ -1,0 +1,23 @@
+[package]
+name = "rustvoice"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "rustvoice"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+dotenvy = { workspace = true }
+clap = { version = "4", features = ["derive"] }
+daemonize = "0.5"
+ratatui = "0.29"
+crossterm = "0.28"
+bot = { path = "../bot" }
+db = { path = "../db" }
+ipc = { path = "../ipc" }

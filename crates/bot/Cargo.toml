@@ -1,0 +1,14 @@
+[package]
+name = "bot"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+dotenvy = { workspace = true }
+poise = "0.6"
+db = { path = "../db" }
+ipc = { path = "../ipc" }
