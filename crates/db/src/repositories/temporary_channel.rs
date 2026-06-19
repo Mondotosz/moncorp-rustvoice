@@ -1,5 +1,6 @@
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, QueryFilter, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, PaginatorTrait,
+    QueryFilter, Set,
 };
 
 use crate::entities::temporary_channel::{self, Entity as TemporaryChannel};
@@ -14,8 +15,40 @@ pub async fn insert(
         id: Set(id),
         guild_id: Set(guild_id),
         primary_channel_id: Set(primary_channel_id),
+        join_channel_id: Set(None),
     };
     TemporaryChannel::insert(model).exec(db).await?;
+    Ok(())
+}
+
+pub async fn find(
+    id: i64,
+    db: &DatabaseConnection,
+) -> Result<Option<temporary_channel::Model>, DbErr> {
+    TemporaryChannel::find_by_id(id).one(db).await
+}
+
+pub async fn find_by_join_channel(
+    join_channel_id: i64,
+    db: &DatabaseConnection,
+) -> Result<Option<temporary_channel::Model>, DbErr> {
+    TemporaryChannel::find()
+        .filter(temporary_channel::Column::JoinChannelId.eq(join_channel_id))
+        .one(db)
+        .await
+}
+
+pub async fn set_join_channel(
+    id: i64,
+    join_channel_id: Option<i64>,
+    db: &DatabaseConnection,
+) -> Result<(), DbErr> {
+    let model = temporary_channel::ActiveModel {
+        id: Set(id),
+        join_channel_id: Set(join_channel_id),
+        ..Default::default()
+    };
+    model.update(db).await?;
     Ok(())
 }
 

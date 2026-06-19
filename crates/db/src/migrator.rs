@@ -2,6 +2,7 @@ use sea_orm_migration::prelude::*;
 
 use crate::migrations::{
     m00001_create_guilds, m00002_create_primary_channels, m00003_create_temporary_channels,
+    m00004_add_join_channel_to_temporary_channels,
 };
 
 pub struct Migrator;
@@ -13,6 +14,7 @@ impl MigratorTrait for Migrator {
             Box::new(m00001_create_guilds::Migration),
             Box::new(m00002_create_primary_channels::Migration),
             Box::new(m00003_create_temporary_channels::Migration),
+            Box::new(m00004_add_join_channel_to_temporary_channels::Migration),
         ]
     }
 }

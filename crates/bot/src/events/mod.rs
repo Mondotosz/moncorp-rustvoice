@@ -48,6 +48,10 @@ async fn startup_cleanup(
         match ctx.http.get_channel(channel_id).await {
             Err(_) => {
                 // Channel was deleted while the bot was offline — remove DB row only.
+                // Best-effort delete of any associated join channel.
+                if let Some(join_id) = channel.join_channel_id {
+                    let _ = serenity::ChannelId::new(join_id as u64).delete(ctx).await;
+                }
                 db::repositories::temporary_channel::delete(channel.id, &data.db).await?;
                 removed += 1;
                 tracing::debug!("Startup cleanup: removed stale DB entry for channel {channel_id}");
@@ -60,6 +64,10 @@ async fn startup_cleanup(
                     .any(|vs| vs.channel_id == Some(channel_id));
 
                 if !has_members {
+                    // Delete the join channel before the temp channel.
+                    if let Some(join_id) = channel.join_channel_id {
+                        let _ = serenity::ChannelId::new(join_id as u64).delete(ctx).await;
+                    }
                     let _ = channel_id.delete(ctx).await;
                     db::repositories::temporary_channel::delete(channel.id, &data.db).await?;
                     removed += 1;
