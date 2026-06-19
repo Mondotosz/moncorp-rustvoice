@@ -7,6 +7,7 @@ pub struct Model {
     pub id: i64,
     pub guild_id: i64,
     pub primary_channel_id: i64,
+    pub join_channel_id: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
