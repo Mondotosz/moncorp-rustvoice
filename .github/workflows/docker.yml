@@ -49,6 +49,6 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ steps.env.outputs.image_name }}:latest
-            ${{ env.REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ steps.env.outputs.value }}
+            ${{ env.REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ steps.env.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
