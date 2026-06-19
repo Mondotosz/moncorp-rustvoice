@@ -1,0 +1,28 @@
+name: rustvoice
+
+services:
+  bot:
+    image: ghcr.io/mondotosz/moncorp-rustvoice:latest
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      DATABASE_URL: sqlite:/data/db.sqlite
+      # Optional — remove or leave unset to skip guild-scoped command registration
+      DISCORD_SERVER_ID: ${DISCORD_SERVER_ID:-}
+      # Pin the socket to a known path so the healthcheck finds it
+      IPC_SOCKET_PATH: /tmp/rustvoice.sock
+    volumes:
+      - data:/data
+    healthcheck:
+      # rustvoice daemon status connects to the IPC socket exposed by the running bot
+      test: ['CMD', 'rustvoice', 'daemon', 'status']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  data:

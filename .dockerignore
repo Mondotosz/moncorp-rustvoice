@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+
+target/
+
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.pid
+*.sock
+
+.git/
+.github/
+CLAUDE.md
+compose.yaml
