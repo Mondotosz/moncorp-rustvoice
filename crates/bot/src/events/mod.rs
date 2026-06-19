@@ -35,8 +35,7 @@ async fn startup_cleanup(
 ) -> Result<(), Error> {
     let guild_id = guild.id;
     let channels =
-        db::repositories::temporary_channel::list_by_guild(guild_id.get() as i64, &data.db)
-            .await?;
+        db::repositories::temporary_channel::list_by_guild(guild_id.get() as i64, &data.db).await?;
 
     if channels.is_empty() {
         return Ok(());

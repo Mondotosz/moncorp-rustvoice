@@ -1,4 +1,6 @@
-use poise::serenity_prelude::{self as serenity, PermissionOverwrite, PermissionOverwriteType, Permissions};
+use poise::serenity_prelude::{
+    self as serenity, PermissionOverwrite, PermissionOverwriteType, Permissions,
+};
 
 use crate::{Context, Error};
 
@@ -39,9 +41,7 @@ pub async fn public(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-async fn user_temp_channel(
-    ctx: Context<'_>,
-) -> Result<Option<serenity::ChannelId>, Error> {
+async fn user_temp_channel(ctx: Context<'_>) -> Result<Option<serenity::ChannelId>, Error> {
     let guild = ctx.guild().ok_or("Not in a guild")?.clone();
     let Some(voice_state) = guild.voice_states.get(&ctx.author().id) else {
         return Ok(None);

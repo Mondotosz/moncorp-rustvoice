@@ -2,7 +2,12 @@ use poise::serenity_prelude::{self as serenity, ChannelType, Context};
 
 use crate::Data;
 
-pub async fn handle(ctx: &Context, old: Option<serenity::VoiceState>, new: serenity::VoiceState, data: &Data) {
+pub async fn handle(
+    ctx: &Context,
+    old: Option<serenity::VoiceState>,
+    new: serenity::VoiceState,
+    data: &Data,
+) {
     let guild_id = match new.guild_id {
         Some(id) => id,
         None => return,
@@ -44,16 +49,25 @@ async fn on_join(
     }
 
     // Create a new temporary voice channel in the same category
-    let parent_id = ctx.http.get_channel(channel_id).await.ok()
+    let parent_id = ctx
+        .http
+        .get_channel(channel_id)
+        .await
+        .ok()
         .and_then(|c| c.guild())
         .and_then(|gc| gc.parent_id);
 
-    let mut builder = guild_id.create_channel(ctx, serenity::builder::CreateChannel::new("[General]")
-        .kind(ChannelType::Voice));
+    let mut builder = guild_id.create_channel(
+        ctx,
+        serenity::builder::CreateChannel::new("[General]").kind(ChannelType::Voice),
+    );
     if let Some(parent) = parent_id {
-        builder = guild_id.create_channel(ctx, serenity::builder::CreateChannel::new("[General]")
-            .kind(ChannelType::Voice)
-            .category(parent));
+        builder = guild_id.create_channel(
+            ctx,
+            serenity::builder::CreateChannel::new("[General]")
+                .kind(ChannelType::Voice)
+                .category(parent),
+        );
     }
     let temp_channel = builder.await?;
 
@@ -66,11 +80,13 @@ async fn on_join(
     .await?;
 
     // Move the user to the new channel
-    guild_id
-        .move_member(ctx, *user_id, temp_channel.id)
-        .await?;
+    guild_id.move_member(ctx, *user_id, temp_channel.id).await?;
 
-    tracing::debug!("Created temp channel {} for user {}", temp_channel.id, user_id);
+    tracing::debug!(
+        "Created temp channel {} for user {}",
+        temp_channel.id,
+        user_id
+    );
     Ok(())
 }
 

@@ -1,5 +1,5 @@
-use sea_orm::{DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, Set};
 use sea_orm::sea_query::OnConflict;
+use sea_orm::{DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, Set};
 
 use crate::entities::guild::{self, Entity as Guild};
 

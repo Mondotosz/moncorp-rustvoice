@@ -4,6 +4,7 @@ use poise::serenity_prelude as serenity;
 
 use crate::{BotContext, Data, Error};
 
+/// Returns the full list of slash commands registered with the Discord framework.
 pub fn all_commands() -> Vec<poise::Command<Data, Error>> {
     vec![
         crate::commands::admin::init(),

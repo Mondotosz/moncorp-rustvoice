@@ -40,7 +40,10 @@ impl MigrationTrait for Migration {
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .from(TemporaryChannels::Table, TemporaryChannels::PrimaryChannelId)
+                            .from(
+                                TemporaryChannels::Table,
+                                TemporaryChannels::PrimaryChannelId,
+                            )
                             .to(PrimaryChannels::Table, PrimaryChannels::Id)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
