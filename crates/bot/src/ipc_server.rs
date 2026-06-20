@@ -68,9 +68,9 @@ async fn cleanup(
     db: &DatabaseConnection,
     bot_ctx: &Arc<OnceLock<BotContext>>,
 ) -> Result<u64, crate::Error> {
-    let ctx = bot_ctx
-        .get()
-        .ok_or("Bot not ready yet — try again in a moment")?;
+    let ctx = bot_ctx.get().ok_or_else(|| {
+        crate::BotError::Other("Bot not ready yet — try again in a moment".to_string())
+    })?;
 
     let channels = db::repositories::temporary_channel::list_all(db).await?;
     let mut removed = 0u64;

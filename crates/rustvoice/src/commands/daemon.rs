@@ -1,9 +1,9 @@
-use crate::cli::DaemonAction;
+use anyhow::{Context as _, Result};
 use ipc::{client::IpcClient, protocol::Request, protocol::Response};
 
-type Error = Box<dyn std::error::Error + Send + Sync>;
+use crate::cli::DaemonAction;
 
-pub async fn run(action: DaemonAction) -> Result<(), Error> {
+pub async fn run(action: DaemonAction) -> Result<()> {
     match action {
         DaemonAction::Start => unreachable!("daemon start is handled in main() before Tokio"),
         DaemonAction::Stop => stop().await,
@@ -11,14 +11,14 @@ pub async fn run(action: DaemonAction) -> Result<(), Error> {
     }
 }
 
-async fn stop() -> Result<(), Error> {
+async fn stop() -> Result<()> {
     let pid_path = ipc::default_pid_path();
     let pid_str = std::fs::read_to_string(&pid_path)
-        .map_err(|_| format!("PID file not found at {pid_path}. Is the daemon running?"))?;
+        .with_context(|| format!("PID file not found at {pid_path}. Is the daemon running?"))?;
     let pid: i32 = pid_str
         .trim()
         .parse()
-        .map_err(|_| format!("Invalid PID in {pid_path}"))?;
+        .with_context(|| format!("Invalid PID in {pid_path}"))?;
 
     let status = std::process::Command::new("kill")
         .arg(pid.to_string())
@@ -32,7 +32,7 @@ async fn stop() -> Result<(), Error> {
     Ok(())
 }
 
-async fn status() -> Result<(), Error> {
+async fn status() -> Result<()> {
     let mut client = IpcClient::connect(&ipc::default_socket_path()).await?;
     match client.send(Request::Status).await? {
         Response::Status { uptime_secs } => {

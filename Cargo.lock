@@ -114,6 +114,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.102"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
+
+[[package]]
 name = "arrayvec"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -279,7 +285,7 @@ dependencies = [
 
 [[package]]
 name = "bot"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "db",
  "dotenvy",
@@ -287,6 +293,7 @@ dependencies = [
  "poise",
  "serde",
  "serde_json",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
 ]
@@ -701,11 +708,12 @@ checksum = "e8566979429cf69b49a5c740c60791108e86440e8be149bbea4fe54d2c32d6e2"
 
 [[package]]
 name = "db"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "sea-orm",
  "sea-orm-migration",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
 ]
@@ -1326,10 +1334,11 @@ dependencies = [
 
 [[package]]
 name = "ipc"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
 ]
@@ -2282,8 +2291,9 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
 name = "rustvoice"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
+ "anyhow",
  "bot",
  "clap",
  "crossterm",

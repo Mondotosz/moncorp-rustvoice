@@ -9,17 +9,37 @@ A Discord bot that creates temporary voice channels on demand and names them aft
 3. The channel is named after the game most members are playing (`[GameName]`), or `[General]` if there's no majority.
 4. The name updates live as members join and leave.
 5. When the last member leaves, the channel is automatically deleted.
+6. Anyone in the channel can run `/private` to lock it. A `[join ↑]` channel appears below — others join it to send a request. Anyone currently inside the private channel sees an Allow/Deny prompt in the channel's text area and can respond. `/public` reverses this and removes the request channel.
 
 ## Slash commands
 
 | Command | Who | Description |
 |---|---|---|
 | `/init <channel>` | Admin (Manage Channels) | Register a voice channel as a trigger |
+| `/permissions` | Admin (Manage Channels) | Show bot permission status for this server (🟢 granted / 🟠 optional missing / 🔴 core missing) |
 | `/rename <name>` | Anyone in a temp channel | Rename your current channel |
 | `/limit <n>` | Anyone in a temp channel | Set a user limit (0 = unlimited) |
 | `/unlimit` | Anyone in a temp channel | Remove the user limit |
-| `/private` | Anyone in a temp channel | Make the channel invite-only |
-| `/public` | Anyone in a temp channel | Make the channel open again |
+| `/private` | Anyone in a temp channel | Lock the channel; creates a `[join ↑]` channel for join requests |
+| `/public` | Anyone in a temp channel | Unlock the channel and remove the `[join ↑]` channel |
+
+## Bot permissions
+
+| Permission | Category | Required for |
+|---|---|---|
+| View Channel | Core | Guild and channel visibility |
+| Manage Channels | Core | Create, delete, and rename temporary voice channels; `/rename`, `/limit` |
+| Move Members | Core | Move users from the trigger channel to their new temp channel |
+| Send Messages | Core | Post Allow/Deny buttons in the private channel's text area |
+| Manage Roles | Optional* | Edit channel permission overwrites — `/private` and `/public` only |
+
+\* **Manage Roles** is only needed if you use `/private` and `/public`. It can be granted server-wide (on the bot's role) **or** as a category-level permission override on the voice category — the bot never touches server roles.
+
+Generate an invite URL with all permissions pre-filled:
+
+```bash
+cargo run -p rustvoice -- invite
+```
 
 ## Setup
 

@@ -1,4 +1,6 @@
-use crate::{Context, Error};
+use poise::serenity_prelude::Permissions;
+
+use crate::{permissions::PermissionResultExt, Context, Error};
 
 /// Rename your current dynamic voice channel.
 #[poise::command(slash_command, guild_only)]
@@ -16,7 +18,8 @@ pub async fn rename(
             ctx,
             poise::serenity_prelude::builder::EditChannel::new().name(&name),
         )
-        .await?;
+        .await
+        .requires(&[Permissions::MANAGE_CHANNELS])?;
     ctx.say(format!("Channel renamed to **{name}**.")).await?;
     Ok(())
 }
@@ -24,7 +27,10 @@ pub async fn rename(
 async fn user_temp_channel(
     ctx: Context<'_>,
 ) -> Result<Option<poise::serenity_prelude::ChannelId>, Error> {
-    let guild = ctx.guild().ok_or("Not in a guild")?.clone();
+    let guild = ctx
+        .guild()
+        .ok_or_else(|| Error::Other("Not in a guild".to_string()))?
+        .clone();
     let Some(voice_state) = guild.voice_states.get(&ctx.author().id) else {
         return Ok(None);
     };

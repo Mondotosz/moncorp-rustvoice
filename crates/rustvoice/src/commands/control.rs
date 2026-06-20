@@ -1,8 +1,7 @@
+use anyhow::Result;
 use ipc::{client::IpcClient, protocol::Request, protocol::Response};
 
-type Error = Box<dyn std::error::Error + Send + Sync>;
-
-pub async fn stats() -> Result<(), Error> {
+pub async fn stats() -> Result<()> {
     let mut client = IpcClient::connect(&ipc::default_socket_path()).await?;
     match client.send(Request::Stats).await? {
         Response::Stats {
@@ -18,7 +17,7 @@ pub async fn stats() -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn cleanup() -> Result<(), Error> {
+pub async fn cleanup() -> Result<()> {
     let mut client = IpcClient::connect(&ipc::default_socket_path()).await?;
     match client.send(Request::Cleanup).await? {
         Response::Cleanup { removed } => {

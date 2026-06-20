@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-use poise::serenity_prelude::{self as serenity, ChannelType, Context};
+use poise::serenity_prelude::{self as serenity, ChannelType, Context, Permissions};
 use serenity::futures::StreamExt as _;
 
-use crate::Data;
+use crate::{permissions::PermissionResultExt, Data};
 
 pub async fn handle(
     ctx: &Context,
@@ -42,7 +42,7 @@ async fn on_join(
     guild_id: serenity::GuildId,
     user_id: &serenity::UserId,
     data: &Data,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), crate::Error> {
     // Check if this is a join-request channel.
     if let Some(temp_record) =
         db::repositories::temporary_channel::find_by_join_channel(channel_id.get() as i64, &data.db)
@@ -81,7 +81,7 @@ async fn on_join(
                 .category(parent),
         );
     }
-    let temp_channel = builder.await?;
+    let temp_channel = builder.await.requires(&[Permissions::MANAGE_CHANNELS])?;
 
     db::repositories::temporary_channel::insert(
         temp_channel.id.get() as i64,
@@ -92,7 +92,10 @@ async fn on_join(
     .await?;
 
     // Move the user to the new channel
-    guild_id.move_member(ctx, *user_id, temp_channel.id).await?;
+    guild_id
+        .move_member(ctx, *user_id, temp_channel.id)
+        .await
+        .requires(&[Permissions::MOVE_MEMBERS])?;
 
     tracing::debug!(
         "Created temp channel {} for user {}",
@@ -108,7 +111,7 @@ async fn handle_join_request(
     temp_record: db::entities::temporary_channel::Model,
     requester_id: serenity::UserId,
     guild_id: serenity::GuildId,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), crate::Error> {
     let private_channel_id = serenity::ChannelId::new(temp_record.id as u64);
 
     let allow_id = format!("join_allow:{}:{}", join_channel_id, requester_id);
@@ -128,7 +131,8 @@ async fn handle_join_request(
                         .style(serenity::ButtonStyle::Danger),
                 ])]),
         )
-        .await?;
+        .await
+        .requires(&[Permissions::SEND_MESSAGES])?;
 
     // Spawn a task to collect the response without blocking the event handler.
     let ctx = ctx.clone();
@@ -265,7 +269,7 @@ async fn on_leave(
     channel_id: serenity::ChannelId,
     guild_id: serenity::GuildId,
     data: &Data,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), crate::Error> {
     let is_temp =
         db::repositories::temporary_channel::exists(channel_id.get() as i64, &data.db).await?;
     if !is_temp {
@@ -292,7 +296,10 @@ async fn on_leave(
                 let _ = serenity::ChannelId::new(join_id as u64).delete(ctx).await;
             }
         }
-        channel_id.delete(ctx).await?;
+        channel_id
+            .delete(ctx)
+            .await
+            .requires(&[Permissions::MANAGE_CHANNELS])?;
         db::repositories::temporary_channel::delete(channel_id.get() as i64, &data.db).await?;
         tracing::debug!("Deleted empty temp channel {}", channel_id);
     } else {
@@ -307,7 +314,7 @@ async fn recalculate_name(
     channel_id: serenity::ChannelId,
     guild_id: serenity::GuildId,
     data: &Data,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), crate::Error> {
     let is_temp =
         db::repositories::temporary_channel::exists(channel_id.get() as i64, &data.db).await?;
     if !is_temp {
@@ -337,7 +344,8 @@ async fn recalculate_name(
     if current_name != new_name {
         channel_id
             .edit(ctx, serenity::builder::EditChannel::new().name(&new_name))
-            .await?;
+            .await
+            .requires(&[Permissions::MANAGE_CHANNELS])?;
     }
 
     Ok(())

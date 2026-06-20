@@ -47,6 +47,8 @@ pub enum Command {
     Stats,
     /// Remove database entries for deleted Discord channels (requires a running daemon)
     Cleanup,
+    /// Generate an OAuth2 invite URL with all required bot permissions (reads DISCORD_TOKEN)
+    Invite,
 }
 
 /// Actions available under the `setup` subcommand.
@@ -93,7 +95,7 @@ pub enum DbAction {
 }
 
 impl Cli {
-    pub async fn run(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn run(self) -> anyhow::Result<()> {
         match self.command {
             Command::Setup { action } => commands::setup::run(action).await,
             Command::Run => commands::run::run().await,
@@ -102,6 +104,7 @@ impl Cli {
             Command::Register { guild, global } => commands::register::run(guild, global).await,
             Command::Stats => commands::control::stats().await,
             Command::Cleanup => commands::control::cleanup().await,
+            Command::Invite => commands::invite::run().await,
         }
     }
 }

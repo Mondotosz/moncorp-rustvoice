@@ -1,6 +1,6 @@
-type Error = Box<dyn std::error::Error + Send + Sync>;
+use anyhow::Result;
 
-pub async fn run(guild_flag: Option<u64>, force_global: bool) -> Result<(), Error> {
+pub async fn run(guild_flag: Option<u64>, force_global: bool) -> Result<()> {
     let token = std::env::var("DISCORD_TOKEN")?;
 
     let guild_id = if force_global {

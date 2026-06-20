@@ -1,4 +1,6 @@
-use crate::{Context, Error};
+use poise::serenity_prelude::Permissions;
+
+use crate::{permissions::PermissionResultExt, Context, Error};
 
 /// Set a user limit (1–99) on your dynamic voice channel.
 #[poise::command(slash_command, guild_only)]
@@ -18,7 +20,8 @@ pub async fn limit(
             ctx,
             poise::serenity_prelude::builder::EditChannel::new().user_limit(count),
         )
-        .await?;
+        .await
+        .requires(&[Permissions::MANAGE_CHANNELS])?;
     ctx.say(format!("User limit set to **{count}**.")).await?;
     Ok(())
 }
@@ -35,7 +38,8 @@ pub async fn unlimit(ctx: Context<'_>) -> Result<(), Error> {
             ctx,
             poise::serenity_prelude::builder::EditChannel::new().user_limit(0),
         )
-        .await?;
+        .await
+        .requires(&[Permissions::MANAGE_CHANNELS])?;
     ctx.say("User limit removed.").await?;
     Ok(())
 }
@@ -43,7 +47,10 @@ pub async fn unlimit(ctx: Context<'_>) -> Result<(), Error> {
 async fn user_temp_channel(
     ctx: Context<'_>,
 ) -> Result<Option<poise::serenity_prelude::ChannelId>, Error> {
-    let guild = ctx.guild().ok_or("Not in a guild")?.clone();
+    let guild = ctx
+        .guild()
+        .ok_or_else(|| Error::Other("Not in a guild".to_string()))?
+        .clone();
     let Some(voice_state) = guild.voice_states.get(&ctx.author().id) else {
         return Ok(None);
     };
