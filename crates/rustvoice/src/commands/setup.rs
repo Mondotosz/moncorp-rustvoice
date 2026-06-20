@@ -102,6 +102,7 @@ impl App {
             fields: vec![
                 mk("DISCORD_TOKEN", "Discord Token", "", true, false),
                 mk("DISCORD_SERVER_ID", "Discord Server ID", "", false, true),
+                mk("DISCORD_OWNER_ID", "Bot Owner User ID", "", false, true),
                 mk(
                     "DATABASE_URL",
                     "Database URL",
