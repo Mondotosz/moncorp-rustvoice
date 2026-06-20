@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use poise::serenity_prelude as serenity;
 
 use crate::{Data, Error};
@@ -27,29 +29,34 @@ pub async fn handle(
     Ok(())
 }
 
-/// Called once per guild on bot reconnect. Removes or deletes temporary channels that
-/// either no longer exist on Discord, or exist but are empty (bot missed the leave events).
+/// Called once per guild on bot reconnect. Removes or deletes stale/empty temp channels,
+/// and awards XP for voice sessions that ended while the bot was offline.
 async fn startup_cleanup(
     ctx: &serenity::Context,
     guild: &serenity::Guild,
     data: &Data,
 ) -> Result<(), Error> {
     let guild_id = guild.id;
-    let channels =
-        db::repositories::temporary_channel::list_by_guild(guild_id.get() as i64, &data.db).await?;
+    let gid = guild_id.get() as i64;
 
-    if channels.is_empty() {
-        return Ok(());
-    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
+    let channels =
+        db::repositories::temporary_channel::list_by_guild(gid, &data.db).await?;
+
+    // Track which temp channel Discord IDs still exist, for session recovery below.
+    let mut live_temp_ids: HashSet<u64> = HashSet::new();
 
     let mut removed = 0u32;
-    for channel in channels {
+    for channel in &channels {
         let channel_id = serenity::ChannelId::new(channel.id as u64);
 
         match ctx.http.get_channel(channel_id).await {
             Err(_) => {
-                // Channel was deleted while the bot was offline — remove DB row only.
-                // Best-effort delete of any associated join channel.
+                // Channel deleted while bot was offline — remove DB row only.
                 if let Some(join_id) = channel.join_channel_id {
                     let _ = serenity::ChannelId::new(join_id as u64).delete(ctx).await;
                 }
@@ -58,14 +65,12 @@ async fn startup_cleanup(
                 tracing::debug!("Startup cleanup: removed stale DB entry for channel {channel_id}");
             }
             Ok(_) => {
-                // Channel still exists — check whether it is empty.
                 let has_members = guild
                     .voice_states
                     .values()
                     .any(|vs| vs.channel_id == Some(channel_id));
 
                 if !has_members {
-                    // Delete the join channel before the temp channel.
                     if let Some(join_id) = channel.join_channel_id {
                         let _ = serenity::ChannelId::new(join_id as u64).delete(ctx).await;
                     }
@@ -75,6 +80,8 @@ async fn startup_cleanup(
                     tracing::debug!(
                         "Startup cleanup: deleted empty temp channel {channel_id} in guild {guild_id}"
                     );
+                } else {
+                    live_temp_ids.insert(channel.id as u64);
                 }
             }
         }
@@ -86,23 +93,66 @@ async fn startup_cleanup(
         );
     }
 
-    // Remove voice sessions for users who are no longer in any voice channel.
-    // Sessions for users still in voice are kept intact (joined_at preserved).
-    let active_user_ids: Vec<i64> = guild
-        .voice_states
-        .keys()
-        .map(|id| id.get() as i64)
-        .collect();
-    if let Err(e) = db::repositories::voice_session::delete_orphaned(
-        guild_id.get() as i64,
-        &active_user_ids,
-        &data.db,
-    )
-    .await
-    {
-        tracing::warn!(
-            "Startup cleanup: voice session orphan removal failed for guild {guild_id}: {e}"
-        );
+    // Award XP for sessions that ended while the bot was offline, then discard them.
+    // Sessions belonging to users still in a live temp channel are preserved.
+    let sessions =
+        db::repositories::voice_session::list_by_guild(gid, &data.db).await?;
+
+    if !sessions.is_empty() {
+        // Users currently sitting in a temp channel — their session stays open.
+        let users_in_temp: HashSet<i64> = guild
+            .voice_states
+            .values()
+            .filter(|vs| {
+                vs.channel_id
+                    .map(|id| live_temp_ids.contains(&id.get()))
+                    .unwrap_or(false)
+            })
+            .map(|vs| vs.user_id.get() as i64)
+            .collect();
+
+        const MAX_DOWNTIME_XP: i64 = 4 * 3600; // 4 h cap
+        const MIN_SESSION_SECS: i64 = 60;
+
+        let mut recovered = 0u32;
+        for session in sessions {
+            if users_in_temp.contains(&session.user_id) {
+                continue;
+            }
+            // User left (or moved to a non-temp channel) while bot was offline.
+            let elapsed = (now - session.joined_at).clamp(0, MAX_DOWNTIME_XP);
+            if elapsed >= MIN_SESSION_SECS {
+                if let Err(e) = db::repositories::user_profile::add_xp(
+                    session.user_id,
+                    gid,
+                    elapsed,
+                    elapsed,
+                    &data.db,
+                )
+                .await
+                {
+                    tracing::warn!(
+                        "Startup cleanup: add_xp failed for user {}: {e}",
+                        session.user_id
+                    );
+                }
+            }
+            if let Err(e) =
+                db::repositories::voice_session::end(session.user_id, gid, &data.db).await
+            {
+                tracing::warn!(
+                    "Startup cleanup: end session failed for user {}: {e}",
+                    session.user_id
+                );
+            }
+            recovered += 1;
+        }
+
+        if recovered > 0 {
+            tracing::info!(
+                "Startup cleanup for guild {guild_id}: recovered XP for {recovered} offline session(s)"
+            );
+        }
     }
 
     Ok(())

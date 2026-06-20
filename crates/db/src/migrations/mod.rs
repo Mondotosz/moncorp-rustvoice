@@ -4,3 +4,4 @@ pub mod m00003_create_temporary_channels;
 pub mod m00004_add_join_channel_to_temporary_channels;
 pub mod m00005_create_user_profiles;
 pub mod m00006_create_voice_sessions;
+pub mod m00007_add_streak_to_user_profiles;

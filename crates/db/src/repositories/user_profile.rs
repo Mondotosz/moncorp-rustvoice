@@ -1,4 +1,4 @@
-use sea_orm::sea_query::OnConflict;
+use sea_orm::sea_query::{Expr, OnConflict};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QueryOrder,
     Set,
@@ -14,6 +14,7 @@ pub async fn upsert(user_id: i64, guild_id: i64, db: &DatabaseConnection) -> Res
         xp: Set(0),
         total_voice_seconds: Set(0),
         last_daily_at: Set(None),
+        streak: Set(0),
     };
     match UserProfile::insert(model)
         .on_conflict(
@@ -49,15 +50,19 @@ pub async fn add_xp(
     db: &DatabaseConnection,
 ) -> Result<(), DbError> {
     upsert(user_id, guild_id, db).await?;
-    let current = get(user_id, guild_id, db).await?.unwrap();
-    let model = user_profile::ActiveModel {
-        user_id: Set(user_id),
-        guild_id: Set(guild_id),
-        xp: Set(current.xp + xp_delta),
-        total_voice_seconds: Set(current.total_voice_seconds + seconds_delta),
-        ..Default::default()
-    };
-    model.update(db).await?;
+    UserProfile::update_many()
+        .col_expr(
+            user_profile::Column::Xp,
+            Expr::col(user_profile::Column::Xp).add(xp_delta),
+        )
+        .col_expr(
+            user_profile::Column::TotalVoiceSeconds,
+            Expr::col(user_profile::Column::TotalVoiceSeconds).add(seconds_delta),
+        )
+        .filter(user_profile::Column::UserId.eq(user_id))
+        .filter(user_profile::Column::GuildId.eq(guild_id))
+        .exec(db)
+        .await?;
     Ok(())
 }
 
@@ -72,17 +77,19 @@ pub async fn list_top_by_guild(
         .await?)
 }
 
-pub async fn set_last_daily(
+pub async fn set_daily_state(
     user_id: i64,
     guild_id: i64,
-    timestamp: i64,
+    last_daily_at: i64,
+    streak: i64,
     db: &DatabaseConnection,
 ) -> Result<(), DbError> {
     upsert(user_id, guild_id, db).await?;
     let model = user_profile::ActiveModel {
         user_id: Set(user_id),
         guild_id: Set(guild_id),
-        last_daily_at: Set(Some(timestamp)),
+        last_daily_at: Set(Some(last_daily_at)),
+        streak: Set(streak),
         ..Default::default()
     };
     model.update(db).await?;

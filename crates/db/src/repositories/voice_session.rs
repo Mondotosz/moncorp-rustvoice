@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use sea_orm::sea_query::OnConflict;
 use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, Set};
 
@@ -72,9 +74,10 @@ pub async fn delete_orphaned(
     active_user_ids: &[i64],
     db: &DatabaseConnection,
 ) -> Result<(), DbError> {
+    let active: HashSet<i64> = active_user_ids.iter().copied().collect();
     let sessions = list_by_guild(guild_id, db).await?;
     for session in sessions {
-        if !active_user_ids.contains(&session.user_id) {
+        if !active.contains(&session.user_id) {
             VoiceSession::delete_many()
                 .filter(voice_session::Column::UserId.eq(session.user_id))
                 .filter(voice_session::Column::GuildId.eq(guild_id))

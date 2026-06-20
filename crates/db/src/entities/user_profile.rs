@@ -10,6 +10,7 @@ pub struct Model {
     pub xp: i64,
     pub total_voice_seconds: i64,
     pub last_daily_at: Option<i64>,
+    pub streak: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

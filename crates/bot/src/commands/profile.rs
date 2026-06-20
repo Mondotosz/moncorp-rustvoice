@@ -17,6 +17,7 @@ pub async fn profile(
     let profile = db::repositories::user_profile::get(uid, gid, &ctx.data().db).await?;
     let xp = profile.as_ref().map(|p| p.xp).unwrap_or(0);
     let total_seconds = profile.as_ref().map(|p| p.total_voice_seconds).unwrap_or(0);
+    let streak = profile.as_ref().map(|p| p.streak).unwrap_or(0);
 
     let level = leveling::level_from_xp(xp);
     let xp_in_level = leveling::xp_in_level(xp);
@@ -41,6 +42,11 @@ pub async fn profile(
     } else {
         leveling::format_duration(total_seconds)
     };
+    let streak_field = if streak == 0 {
+        "—".to_string()
+    } else {
+        format!("🔥 {streak}")
+    };
 
     let embed = CreateEmbed::new()
         .author(CreateEmbedAuthor::new(&display_name).icon_url(&avatar_url))
@@ -48,6 +54,7 @@ pub async fn profile(
         .field("Level", level.to_string(), true)
         .field("XP", xp_field, true)
         .field("Voice Time", voice_field, true)
+        .field("Streak", streak_field, true)
         .field("Progress", bar, false);
 
     ctx.send(poise::CreateReply::default().embed(embed)).await?;
