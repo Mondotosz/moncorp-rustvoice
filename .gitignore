@@ -1,4 +1,8 @@
 /target
 .env
-db.sqlite
+.env.*
+*.sqlite
+*.db
 .sqlx
+
+!.env.example
