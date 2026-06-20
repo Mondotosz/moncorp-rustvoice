@@ -1,8 +1,8 @@
+use anyhow::Result;
+
 use crate::cli::DbAction;
 
-type Error = Box<dyn std::error::Error + Send + Sync>;
-
-pub async fn run(action: DbAction) -> Result<(), Error> {
+pub async fn run(action: DbAction) -> Result<()> {
     let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:./db.sqlite".into());
 
     let db = db::connection::connect_raw(&url).await?;

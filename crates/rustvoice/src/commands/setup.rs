@@ -14,11 +14,11 @@ use ratatui::{
     Terminal,
 };
 
+use anyhow::Result;
+
 use crate::cli::SetupAction;
 
-type Error = Box<dyn std::error::Error + Send + Sync>;
-
-pub async fn run(action: Option<SetupAction>) -> Result<(), Error> {
+pub async fn run(action: Option<SetupAction>) -> Result<()> {
     match action {
         Some(SetupAction::Db) => {
             let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:./db.sqlite".into());
@@ -477,7 +477,7 @@ fn env_write(path: &str, fields: &[Field]) {
 
 // ─── Database init ─────────────────────────────────────────────────────────
 
-async fn prompt_db_init(url: &str) -> Result<(), Error> {
+async fn prompt_db_init(url: &str) -> Result<()> {
     match db::management::needs_migration(url).await {
         Ok(None) => {
             println!("Database is up to date.");

@@ -95,7 +95,7 @@ pub enum DbAction {
 }
 
 impl Cli {
-    pub async fn run(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn run(self) -> anyhow::Result<()> {
         match self.command {
             Command::Setup { action } => commands::setup::run(action).await,
             Command::Run => commands::run::run().await,

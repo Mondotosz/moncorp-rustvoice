@@ -42,7 +42,7 @@ async fn on_join(
     guild_id: serenity::GuildId,
     user_id: &serenity::UserId,
     data: &Data,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), crate::Error> {
     // Check if this is a join-request channel.
     if let Some(temp_record) =
         db::repositories::temporary_channel::find_by_join_channel(channel_id.get() as i64, &data.db)
@@ -113,7 +113,7 @@ async fn handle_join_request(
     temp_record: db::entities::temporary_channel::Model,
     requester_id: serenity::UserId,
     guild_id: serenity::GuildId,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), crate::Error> {
     let private_channel_id = serenity::ChannelId::new(temp_record.id as u64);
 
     let allow_id = format!("join_allow:{}:{}", join_channel_id, requester_id);
@@ -271,7 +271,7 @@ async fn on_leave(
     channel_id: serenity::ChannelId,
     guild_id: serenity::GuildId,
     data: &Data,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), crate::Error> {
     let is_temp =
         db::repositories::temporary_channel::exists(channel_id.get() as i64, &data.db).await?;
     if !is_temp {
@@ -316,7 +316,7 @@ async fn recalculate_name(
     channel_id: serenity::ChannelId,
     guild_id: serenity::GuildId,
     data: &Data,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), crate::Error> {
     let is_temp =
         db::repositories::temporary_channel::exists(channel_id.get() as i64, &data.db).await?;
     if !is_temp {

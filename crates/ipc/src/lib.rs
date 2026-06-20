@@ -2,6 +2,8 @@ pub mod client;
 pub mod protocol;
 pub mod server;
 
+pub use client::IpcError;
+
 /// Returns the IPC socket path, resolved in priority order:
 /// 1. `IPC_SOCKET_PATH` env var
 /// 2. `$XDG_RUNTIME_DIR/rustvoice.sock`

@@ -1,5 +1,3 @@
-use std::fmt;
-
 use poise::serenity_prelude::{self as serenity, Permissions};
 
 #[derive(Copy, Clone)]
@@ -78,39 +76,24 @@ pub const PRIVACY: Permissions = Permissions::MANAGE_ROLES;
 /// Union of all permissions the bot uses; drives the invite URL.
 pub const ALL: Permissions = CORE.union(PRIVACY);
 
+fn format_names(required: &[Permissions]) -> String {
+    required
+        .iter()
+        .filter_map(|p| ENTRIES.iter().find(|e| e.permission == *p).map(|e| e.name))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 /// A Discord API call failed, and these permissions were required for it.
 ///
 /// `source` is boxed because `serenity::Error` is a large enum.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("bot permission error (requires: {required_names}): {source}")]
 pub struct BotPermissionError {
     pub required: &'static [Permissions],
+    required_names: String,
+    #[source]
     pub source: Box<serenity::Error>,
-}
-
-impl fmt::Display for BotPermissionError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let names: Vec<&str> = self
-            .required
-            .iter()
-            .filter_map(|p| ENTRIES.iter().find(|e| e.permission == *p).map(|e| e.name))
-            .collect();
-        if names.is_empty() {
-            write!(f, "Bot permission error: {}", self.source)
-        } else {
-            write!(
-                f,
-                "Bot permission error (requires: {}): {}",
-                names.join(", "),
-                self.source
-            )
-        }
-    }
-}
-
-impl std::error::Error for BotPermissionError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(self.source.as_ref())
-    }
 }
 
 /// Extension for `Result<T, serenity::Error>`: annotates the error with the
@@ -123,6 +106,7 @@ impl<T> PermissionResultExt<T> for Result<T, serenity::Error> {
     fn requires(self, required: &'static [Permissions]) -> Result<T, BotPermissionError> {
         self.map_err(|source| BotPermissionError {
             required,
+            required_names: format_names(required),
             source: Box::new(source),
         })
     }

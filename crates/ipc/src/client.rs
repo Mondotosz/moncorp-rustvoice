@@ -3,6 +3,14 @@ use tokio::net::UnixStream;
 
 use crate::protocol::{Request, Response};
 
+#[derive(Debug, thiserror::Error)]
+pub enum IpcError {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+}
+
 /// Async Unix socket client for communicating with the running bot daemon.
 pub struct IpcClient {
     read: BufReader<tokio::net::unix::OwnedReadHalf>,
@@ -36,10 +44,7 @@ impl IpcClient {
     }
 
     /// Send a [`Request`] to the daemon and wait for its [`Response`].
-    pub async fn send(
-        &mut self,
-        request: Request,
-    ) -> Result<Response, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn send(&mut self, request: Request) -> Result<Response, IpcError> {
         let mut json = serde_json::to_string(&request)?;
         json.push('\n');
         self.write.write_all(json.as_bytes()).await?;
