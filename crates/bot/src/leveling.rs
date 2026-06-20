@@ -98,7 +98,10 @@ mod tests {
     fn level_100_near_two_thousand_hours() {
         let xp = xp_for_level(100);
         let hours = xp / 3600;
-        assert!(hours > 1800 && hours < 2200, "level 100 = {hours}h (expected ~2000h)");
+        assert!(
+            hours > 1800 && hours < 2200,
+            "level 100 = {hours}h (expected ~2000h)"
+        );
     }
 
     #[test]
@@ -106,15 +109,26 @@ mod tests {
         let cost_99_100 = xp_for_level(100) - xp_for_level(99);
         let cost_100_101 = xp_for_level(101) - xp_for_level(100);
         let cost_101_102 = xp_for_level(102) - xp_for_level(101);
-        assert!(cost_100_101 > cost_99_100, "post-100 should cost more than 99→100");
-        assert_eq!(cost_101_102 - cost_100_101, 86400, "each post-100 level adds exactly 24h");
+        assert!(
+            cost_100_101 > cost_99_100,
+            "post-100 should cost more than 99→100"
+        );
+        assert_eq!(
+            cost_101_102 - cost_100_101,
+            86400,
+            "each post-100 level adds exactly 24h"
+        );
     }
 
     #[test]
     fn level_from_xp_roundtrip() {
         for n in [1, 5, 10, 50, 99, 100, 101, 150] {
             let xp = xp_for_level(n);
-            assert_eq!(level_from_xp(xp), n, "level_from_xp(xp_for_level({n})) should be {n}");
+            assert_eq!(
+                level_from_xp(xp),
+                n,
+                "level_from_xp(xp_for_level({n})) should be {n}"
+            );
         }
     }
 

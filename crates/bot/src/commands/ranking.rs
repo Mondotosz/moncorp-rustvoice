@@ -1,8 +1,6 @@
 use std::time::Duration;
 
-use poise::serenity_prelude::{
-    self as serenity, CreateEmbed, CreateEmbedFooter,
-};
+use poise::serenity_prelude::{self as serenity, CreateEmbed, CreateEmbedFooter};
 use serenity::futures::StreamExt as _;
 
 use crate::{leveling, Context, Error};
@@ -15,8 +13,7 @@ pub async fn ranking(ctx: Context<'_>) -> Result<(), Error> {
     let guild_id = ctx.guild_id().unwrap();
     let gid = guild_id.get() as i64;
 
-    let profiles =
-        db::repositories::user_profile::list_top_by_guild(gid, &ctx.data().db).await?;
+    let profiles = db::repositories::user_profile::list_top_by_guild(gid, &ctx.data().db).await?;
 
     if profiles.is_empty() {
         ctx.send(
@@ -52,10 +49,11 @@ pub async fn ranking(ctx: Context<'_>) -> Result<(), Error> {
     let msg = reply.message().await?;
     let msg_id = msg.id;
 
-    let mut stream = serenity::collector::ComponentInteractionCollector::new(ctx.serenity_context())
-        .filter(move |i| i.message.id == msg_id)
-        .timeout(Duration::from_secs(60))
-        .stream();
+    let mut stream =
+        serenity::collector::ComponentInteractionCollector::new(ctx.serenity_context())
+            .filter(move |i| i.message.id == msg_id)
+            .timeout(Duration::from_secs(60))
+            .stream();
 
     while let Some(interaction) = stream.next().await {
         match interaction.data.custom_id.as_str() {
@@ -111,7 +109,10 @@ fn build_embed(
             } else {
                 leveling::format_duration(p.total_voice_seconds)
             };
-            format!("{medal} **#{rank}** <@{}> — Lv.{level} · {time}", p.user_id as u64)
+            format!(
+                "{medal} **#{rank}** <@{}> — Lv.{level} · {time}",
+                p.user_id as u64
+            )
         })
         .collect::<Vec<_>>()
         .join("\n");

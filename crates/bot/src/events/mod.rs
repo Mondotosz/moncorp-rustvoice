@@ -100,7 +100,9 @@ async fn startup_cleanup(
     )
     .await
     {
-        tracing::warn!("Startup cleanup: voice session orphan removal failed for guild {guild_id}: {e}");
+        tracing::warn!(
+            "Startup cleanup: voice session orphan removal failed for guild {guild_id}: {e}"
+        );
     }
 
     Ok(())

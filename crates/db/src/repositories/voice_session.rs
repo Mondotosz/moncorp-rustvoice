@@ -1,5 +1,5 @@
-use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, Set};
 use sea_orm::sea_query::OnConflict;
+use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, Set};
 
 use crate::entities::voice_session::{self, Entity as VoiceSession};
 use crate::error::DbError;
@@ -17,9 +17,12 @@ pub async fn start(
     };
     match VoiceSession::insert(model)
         .on_conflict(
-            OnConflict::columns([voice_session::Column::UserId, voice_session::Column::GuildId])
-                .do_nothing()
-                .to_owned(),
+            OnConflict::columns([
+                voice_session::Column::UserId,
+                voice_session::Column::GuildId,
+            ])
+            .do_nothing()
+            .to_owned(),
         )
         .exec(db)
         .await

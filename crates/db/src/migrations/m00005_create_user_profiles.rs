@@ -38,7 +38,11 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .default(0),
                     )
-                    .col(ColumnDef::new(UserProfiles::LastDailyAt).big_integer().null())
+                    .col(
+                        ColumnDef::new(UserProfiles::LastDailyAt)
+                            .big_integer()
+                            .null(),
+                    )
                     .primary_key(
                         Index::create()
                             .col(UserProfiles::UserId)

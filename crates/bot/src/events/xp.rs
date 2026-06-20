@@ -28,24 +28,22 @@ pub async fn handle_voice_transition(
     // Close session if leaving a bot-managed temp channel.
     if let Some(old_id) = old_channel_id {
         match db::repositories::temporary_channel::exists(old_id.get() as i64, &data.db).await {
-            Ok(true) => {
-                match db::repositories::voice_session::end(uid, gid, &data.db).await {
-                    Ok(Some(joined_at)) => {
-                        let duration = (now - joined_at).max(0);
-                        if duration > 0 {
-                            if let Err(e) = db::repositories::user_profile::add_xp(
-                                uid, gid, duration, duration, &data.db,
-                            )
-                            .await
-                            {
-                                tracing::warn!("XP: add_xp failed for user {uid} in guild {gid}: {e}");
-                            }
+            Ok(true) => match db::repositories::voice_session::end(uid, gid, &data.db).await {
+                Ok(Some(joined_at)) => {
+                    let duration = (now - joined_at).max(0);
+                    if duration > 0 {
+                        if let Err(e) = db::repositories::user_profile::add_xp(
+                            uid, gid, duration, duration, &data.db,
+                        )
+                        .await
+                        {
+                            tracing::warn!("XP: add_xp failed for user {uid} in guild {gid}: {e}");
                         }
                     }
-                    Ok(None) => {}
-                    Err(e) => tracing::warn!("XP: voice_session::end failed: {e}"),
                 }
-            }
+                Ok(None) => {}
+                Err(e) => tracing::warn!("XP: voice_session::end failed: {e}"),
+            },
             Ok(false) => {}
             Err(e) => tracing::warn!("XP: temp channel existence check failed: {e}"),
         }
