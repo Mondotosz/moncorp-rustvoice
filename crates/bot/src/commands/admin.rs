@@ -158,10 +158,16 @@ pub async fn remove_trigger(
             .await?;
 
     if !active.is_empty() {
-        let mentions: Vec<String> = active
+        const MAX_SHOWN: usize = 10;
+        let shown = active.len().min(MAX_SHOWN);
+        let mut mention_list: String = active[..shown]
             .iter()
             .map(|c| format!("<#{}>", c.id as u64))
-            .collect();
+            .collect::<Vec<_>>()
+            .join(", ");
+        if active.len() > MAX_SHOWN {
+            mention_list.push_str(&format!(" and {} more", active.len() - MAX_SHOWN));
+        }
         ctx.send(
             poise::CreateReply::default()
                 .content(format!(
@@ -169,7 +175,7 @@ pub async fn remove_trigger(
                      Wait for them to empty or run `rustvoice cleanup` first.",
                     channel.id,
                     active.len(),
-                    mentions.join(", ")
+                    mention_list
                 ))
                 .ephemeral(true),
         )

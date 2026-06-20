@@ -49,13 +49,22 @@ pub async fn invite_url(token: &str) -> Result<String, Error> {
 pub async fn run(token: String, db: DatabaseConnection, socket_path: String) -> Result<(), Error> {
     let start_time = std::time::Instant::now();
 
-    let owner_id = std::env::var("DISCORD_OWNER_ID")
-        .ok()
-        .and_then(|s| s.parse::<u64>().ok())
-        .map(serenity::UserId::new);
-    if owner_id.is_none() {
-        tracing::warn!("DISCORD_OWNER_ID not set — /register will be inaccessible");
-    }
+    let owner_id = match std::env::var("DISCORD_OWNER_ID") {
+        Err(_) => {
+            tracing::warn!("DISCORD_OWNER_ID not set — /register will be inaccessible");
+            None
+        }
+        Ok(val) => match val.parse::<u64>() {
+            Ok(id) => Some(serenity::UserId::new(id)),
+            Err(_) => {
+                tracing::warn!(
+                    "DISCORD_OWNER_ID='{}' is not a valid user ID — /register will be inaccessible",
+                    val
+                );
+                None
+            }
+        },
+    };
 
     let bot_ctx: Arc<OnceLock<BotContext>> = Arc::new(OnceLock::new());
 
