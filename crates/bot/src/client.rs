@@ -95,7 +95,7 @@ async fn on_error(err: poise::FrameworkError<'_, Data, Error>) {
         poise::FrameworkError::Command { error, ctx, .. } => {
             tracing::error!("Command /{} failed: {error:?}", ctx.command().name);
             let msg = if let BotError::Permission(perm_err) = &error {
-                let bot_perms = bot_guild_permissions(&ctx);
+                let bot_perms = bot_guild_permissions(&ctx).await;
                 let missing: Vec<&str> = perm_err
                     .required
                     .iter()
@@ -157,14 +157,29 @@ async fn on_error(err: poise::FrameworkError<'_, Data, Error>) {
     }
 }
 
-fn bot_guild_permissions(ctx: &crate::Context<'_>) -> Permissions {
-    let Some(guild) = ctx.guild() else {
+pub(crate) async fn bot_guild_permissions(ctx: &crate::Context<'_>) -> Permissions {
+    let serenity_ctx = ctx.serenity_context();
+    let bot_id = serenity_ctx.cache.current_user().id;
+    let Some(guild_id) = ctx.guild_id() else {
         return Permissions::empty();
     };
-    let bot_id = ctx.serenity_context().cache.current_user().id;
-    guild
-        .members
-        .get(&bot_id)
-        .map(|m| guild.member_permissions(m))
+
+    // Try cache first — resolve eagerly so the GuildRef is not held across an await.
+    if let Some(perms) = ctx.guild().and_then(|guild| {
+        guild
+            .members
+            .get(&bot_id)
+            .map(|m| guild.member_permissions(m))
+    }) {
+        return perms;
+    }
+
+    // Cache miss — fetch member via HTTP then compute against the cached guild roles.
+    let Ok(member) = guild_id.member(serenity_ctx, bot_id).await else {
+        return Permissions::empty();
+    };
+
+    ctx.guild()
+        .map(|guild| guild.member_permissions(&member))
         .unwrap_or(Permissions::empty())
 }

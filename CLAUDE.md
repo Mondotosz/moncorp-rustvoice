@@ -52,19 +52,23 @@ Cargo workspace with four crates under `crates/`:
 - **`bot`** (library) — All Discord interaction. Poise slash commands under
   `commands/`, Serenity event handlers under `events/`. `activity.rs` computes
   activity-based channel names from member presences. `ipc_server.rs` starts a
-  Unix socket server so the CLI can query the running bot. `permissions.rs` is the
-  single source of truth for all permission metadata, the `BotPermissionError` type,
-  and the `PermissionResultExt` trait. Uses `thiserror` for error types.
+  Unix socket server so the CLI can query the running bot. `error.rs` defines
+  `BotError` (thiserror enum), the concrete error type used by all commands and
+  public APIs. `permissions.rs` is the single source of truth for all permission
+  metadata, the `BotPermissionError` type (one variant of `BotError`), and the
+  `PermissionResultExt` trait.
 - **`db`** (library) — SeaORM entities (`guilds`, `primary_channels`,
   `temporary_channels`) in `entities/`, thin async wrappers in `repositories/`.
+  `error.rs` defines `DbError` (thiserror enum with `Db(sea_orm::DbErr)` and
+  `Io(std::io::Error)` variants) — all public functions return `Result<_, DbError>`.
   `connection.rs` builds the pool and runs migrations. `management.rs` exposes
   migration operations (status, up, down, fresh, refresh, reset). `migrator.rs`
   + `migrations/` contain the embedded migration list.
 - **`ipc`** (library) — Shared `Request`/`Response` protocol types in
   `protocol.rs`, a Tokio `UnixListener` server helper in `server.rs`, and a
   `UnixStream` client helper in `client.rs`. `IpcError` (thiserror enum) is the
-  typed error for `IpcClient::send`. Used by `bot` (server side) and
-  `rustvoice` (client side).
+  typed error for all `IpcClient` operations (`connect` and `send`). Used by
+  `bot` (server side) and `rustvoice` (client side).
 
 ## Key Patterns
 
@@ -101,12 +105,14 @@ with 50013 annotates itself this way. `bot::invite_url()` in `lib.rs` uses
 `permissions::ALL.bits()` to generate the OAuth2 URL.
 
 **Error handling**: `client::on_error` distinguishes `FrameworkError::Command`
-(downcasts to `BotPermissionError` first; if matched, computes which required
-permissions are actually missing from the bot's cached guild permissions and shows
-a precise ephemeral message; if `MANAGE_ROLES` is missing, adds a note that it can
-be granted at the voice category level instead of server-wide) from
+(pattern-matches `BotError::Permission` directly — no downcast needed — computes
+which required permissions are actually missing via `bot_guild_permissions`, and
+shows a precise ephemeral message; if `MANAGE_ROLES` is missing, adds a note that
+it can be granted at the voice category level instead of server-wide) from
 `FrameworkError::CommandCheckFailed` (sends "no permission" ephemeral). All
 command errors are surfaced to the invoking user as ephemeral messages.
+`bot_guild_permissions` tries the Serenity cache first and falls back to an HTTP
+member fetch if the bot is not present in the cached guild member map.
 
 **Database**: SeaORM with SQLite. Entity table names are plural (`guilds`,
 `primary_channels`, `temporary_channels`) — migration `DeriveIden` enums must

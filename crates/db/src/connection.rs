@@ -51,7 +51,9 @@ fn ensure_sqlite_dir(url: &str) -> Result<(), DbError> {
     // Create parent directories first.
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent).map_err(|e| {
+                std::io::Error::new(e.kind(), format!("cannot create {}: {e}", parent.display()))
+            })?;
         }
     }
 
@@ -61,7 +63,10 @@ fn ensure_sqlite_dir(url: &str) -> Result<(), DbError> {
             .create(true)
             .truncate(false)
             .write(true)
-            .open(path)?;
+            .open(path)
+            .map_err(|e| {
+                std::io::Error::new(e.kind(), format!("cannot create {}: {e}", path.display()))
+            })?;
     }
 
     Ok(())

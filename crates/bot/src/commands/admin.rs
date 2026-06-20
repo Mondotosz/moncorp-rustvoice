@@ -1,4 +1,4 @@
-use poise::serenity_prelude::{self as serenity, Permissions};
+use poise::serenity_prelude as serenity;
 
 use crate::{
     permissions::{self, Category},
@@ -40,17 +40,7 @@ pub async fn init(
 /// Show the bot's permission status in this guild.
 #[poise::command(slash_command, guild_only, check = "has_manage_channels")]
 pub async fn permissions(ctx: Context<'_>) -> Result<(), Error> {
-    let bot_perms = {
-        let guild = ctx
-            .guild()
-            .ok_or_else(|| Error::Other("Not in a guild".to_string()))?;
-        let bot_id = ctx.serenity_context().cache.current_user().id;
-        guild
-            .members
-            .get(&bot_id)
-            .map(|m| guild.member_permissions(m))
-            .unwrap_or(Permissions::empty())
-    };
+    let bot_perms = crate::client::bot_guild_permissions(&ctx).await;
 
     let mut lines = vec!["**Bot Permission Status**".to_string()];
     for entry in permissions::ENTRIES {
