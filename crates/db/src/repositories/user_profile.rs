@@ -1,5 +1,6 @@
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter,
+    QueryOrder, Set,
 };
 use sea_orm::sea_query::OnConflict;
 
@@ -58,6 +59,17 @@ pub async fn add_xp(
     };
     model.update(db).await?;
     Ok(())
+}
+
+pub async fn list_top_by_guild(
+    guild_id: i64,
+    db: &DatabaseConnection,
+) -> Result<Vec<user_profile::Model>, DbError> {
+    Ok(UserProfile::find()
+        .filter(user_profile::Column::GuildId.eq(guild_id))
+        .order_by_desc(user_profile::Column::Xp)
+        .all(db)
+        .await?)
 }
 
 pub async fn set_last_daily(

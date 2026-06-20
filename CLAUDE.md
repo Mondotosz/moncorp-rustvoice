@@ -133,7 +133,9 @@ level 100 ≈ 2000h total; arithmetic +24h per level beyond 100. XP is stored in
 seconds (1s of voice = 1 XP). The daily bonus (3600 XP ≈ 1h) is awarded
 automatically on the first join of a bot-managed temp channel per 24h window, via
 `events/xp.rs::handle_voice_transition`. `/profile [user]` shows an embed with
-level, XP progress bar (Unicode `█`/`░`), and total voice time.
+level, XP progress bar (Unicode `█`/`░`), and total voice time. `/ranking` shows
+the server leaderboard sorted by XP with ◀/▶ button pagination (10 per page, 60 s
+timeout, buttons auto-disabled on expiry).
 `user_profiles(user_id, guild_id)` holds XP and last-daily timestamp;
 `voice_sessions(user_id, guild_id)` tracks active session join times. On startup
 cleanup, sessions for users no longer in voice are discarded.

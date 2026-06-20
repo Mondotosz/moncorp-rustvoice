@@ -10,6 +10,7 @@ pub fn all_commands() -> Vec<poise::Command<Data, Error>> {
         crate::commands::admin::init(),
         crate::commands::admin::permissions(),
         crate::commands::profile::profile(),
+        crate::commands::ranking::ranking(),
         crate::commands::voice::rename(),
         crate::commands::voice::limit(),
         crate::commands::voice::unlimit(),
