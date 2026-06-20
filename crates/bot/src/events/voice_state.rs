@@ -16,6 +16,10 @@ pub async fn handle(
         None => return,
     };
 
+    let old_channel = old.as_ref().and_then(|o| o.channel_id);
+    super::xp::handle_voice_transition(new.user_id, old_channel, new.channel_id, guild_id, data)
+        .await;
+
     // User left a channel
     if let Some(ref old_state) = old {
         if let Some(left_channel) = old_state.channel_id {
