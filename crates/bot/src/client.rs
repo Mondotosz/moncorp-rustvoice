@@ -94,50 +94,48 @@ async fn on_error(err: poise::FrameworkError<'_, Data, Error>) {
     match err {
         poise::FrameworkError::Command { error, ctx, .. } => {
             tracing::error!("Command /{} failed: {error:?}", ctx.command().name);
-            let msg = if let Some(perm_err) =
-                error.downcast_ref::<permissions::BotPermissionError>()
-            {
-                let bot_perms = bot_guild_permissions(&ctx);
-                let missing: Vec<&str> = perm_err
-                    .required
-                    .iter()
-                    .filter(|&&p| !bot_perms.contains(p))
-                    .filter_map(|p| {
-                        permissions::ENTRIES
-                            .iter()
-                            .find(|e| e.permission == *p)
-                            .map(|e| e.name)
-                    })
-                    .collect();
-                if missing.is_empty() {
-                    "Missing Permissions — all expected permissions appear to be granted. \
-                     Check channel-level overrides or contact a server admin."
-                        .to_string()
-                } else {
-                    let base = format!(
-                        "Missing Permissions: the bot needs **{}** to perform this action.",
-                        missing.join(", ")
-                    );
-                    let manage_roles_missing = perm_err
+            let msg =
+                if let Some(perm_err) = error.downcast_ref::<permissions::BotPermissionError>() {
+                    let bot_perms = bot_guild_permissions(&ctx);
+                    let missing: Vec<&str> = perm_err
                         .required
-                        .contains(&Permissions::MANAGE_ROLES)
-                        && !bot_perms.contains(Permissions::MANAGE_ROLES);
-                    if manage_roles_missing {
-                        format!(
-                            "{base} **Manage Roles** can be granted server-wide (in the bot's \
+                        .iter()
+                        .filter(|&&p| !bot_perms.contains(p))
+                        .filter_map(|p| {
+                            permissions::ENTRIES
+                                .iter()
+                                .find(|e| e.permission == *p)
+                                .map(|e| e.name)
+                        })
+                        .collect();
+                    if missing.is_empty() {
+                        "Missing Permissions — all expected permissions appear to be granted. \
+                     Check channel-level overrides or contact a server admin."
+                            .to_string()
+                    } else {
+                        let base = format!(
+                            "Missing Permissions: the bot needs **{}** to perform this action.",
+                            missing.join(", ")
+                        );
+                        let manage_roles_missing =
+                            perm_err.required.contains(&Permissions::MANAGE_ROLES)
+                                && !bot_perms.contains(Permissions::MANAGE_ROLES);
+                        if manage_roles_missing {
+                            format!(
+                                "{base} **Manage Roles** can be granted server-wide (in the bot's \
                              role) or at minimum on the voice channel category's permission \
                              overrides — the bot does not use it to manage server roles."
-                        )
-                    } else {
-                        format!(
-                            "{base} A server admin can re-invite the bot or grant the missing \
+                            )
+                        } else {
+                            format!(
+                                "{base} A server admin can re-invite the bot or grant the missing \
                              permissions."
-                        )
+                            )
+                        }
                     }
-                }
-            } else {
-                format!("Error: {error}")
-            };
+                } else {
+                    format!("Error: {error}")
+                };
             let _ = ctx
                 .send(poise::CreateReply::default().content(msg).ephemeral(true))
                 .await;

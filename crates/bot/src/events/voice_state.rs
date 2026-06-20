@@ -81,9 +81,7 @@ async fn on_join(
                 .category(parent),
         );
     }
-    let temp_channel = builder
-        .await
-        .requires(&[Permissions::MANAGE_CHANNELS])?;
+    let temp_channel = builder.await.requires(&[Permissions::MANAGE_CHANNELS])?;
 
     db::repositories::temporary_channel::insert(
         temp_channel.id.get() as i64,
