@@ -109,20 +109,25 @@ impl Cli {
     }
 }
 
-/// Initialise the `tracing` subscriber, with verbosity driven by the `-v` count.
+/// Initialise the `tracing` subscriber.
+///
+/// `RUST_LOG` takes full control when set; `-v` count is the fallback when it is not.
 pub fn init_tracing(verbose: u8) {
     use tracing::Level;
     use tracing_subscriber::EnvFilter;
 
-    let level = match verbose {
-        0 => Level::ERROR,
-        1 => Level::WARN,
-        2 => Level::INFO,
-        3 => Level::DEBUG,
-        _ => Level::TRACE,
+    let filter = if std::env::var("RUST_LOG").is_ok() {
+        EnvFilter::from_default_env()
+    } else {
+        let level = match verbose {
+            0 => Level::ERROR,
+            1 => Level::WARN,
+            2 => Level::INFO,
+            3 => Level::DEBUG,
+            _ => Level::TRACE,
+        };
+        EnvFilter::new(level.as_str())
     };
 
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env().add_directive(level.into()))
-        .init();
+    tracing_subscriber::fmt().with_env_filter(filter).init();
 }

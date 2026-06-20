@@ -80,6 +80,16 @@ pub async fn list_by_guild(
         .await?)
 }
 
+pub async fn list_by_primary_channel(
+    primary_channel_id: i64,
+    db: &DatabaseConnection,
+) -> Result<Vec<temporary_channel::Model>, DbError> {
+    Ok(TemporaryChannel::find()
+        .filter(temporary_channel::Column::PrimaryChannelId.eq(primary_channel_id))
+        .all(db)
+        .await?)
+}
+
 pub async fn count_by_guild(guild_id: i64, db: &DatabaseConnection) -> Result<u64, DbError> {
     Ok(TemporaryChannel::find()
         .filter(temporary_channel::Column::GuildId.eq(guild_id))

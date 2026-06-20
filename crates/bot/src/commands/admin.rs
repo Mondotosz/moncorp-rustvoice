@@ -77,6 +77,126 @@ pub async fn permissions(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Re-register slash commands globally with Discord.
+#[poise::command(slash_command, guild_only, check = "is_owner")]
+pub async fn register(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+    let commands = &ctx.framework().options().commands;
+    let create_cmds = poise::builtins::create_application_commands(commands);
+    serenity::Command::set_global_commands(ctx.serenity_context(), create_cmds).await?;
+    ctx.say("Slash commands registered globally. Changes may take up to 1 hour to propagate.")
+        .await?;
+    Ok(())
+}
+
+/// List all auto-voice trigger channels configured in this server.
+#[poise::command(slash_command, guild_only, check = "has_manage_channels")]
+pub async fn triggers(ctx: Context<'_>) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().get() as i64;
+    let channels =
+        db::repositories::primary_channel::list_by_guild(guild_id, &ctx.data().db).await?;
+
+    let content = if channels.is_empty() {
+        "No trigger channels are configured. Use `/init` to add one.".to_string()
+    } else {
+        let lines: Vec<String> = channels
+            .iter()
+            .map(|c| format!("• <#{}>", c.id as u64))
+            .collect();
+        format!("**Auto-voice trigger channels:**\n{}", lines.join("\n"))
+    };
+
+    ctx.send(
+        poise::CreateReply::default()
+            .content(content)
+            .ephemeral(true),
+    )
+    .await?;
+    Ok(())
+}
+
+/// Remove a trigger channel from the auto-voice system (does not delete the Discord channel).
+#[poise::command(
+    slash_command,
+    guild_only,
+    rename = "remove-trigger",
+    check = "has_manage_channels"
+)]
+pub async fn remove_trigger(
+    ctx: Context<'_>,
+    #[description = "The trigger channel to remove"]
+    #[channel_types("Voice")]
+    channel: serenity::GuildChannel,
+) -> Result<(), Error> {
+    if channel.kind != serenity::ChannelType::Voice {
+        ctx.send(
+            poise::CreateReply::default()
+                .content("Please select a voice channel.")
+                .ephemeral(true),
+        )
+        .await?;
+        return Ok(());
+    }
+
+    let channel_id = channel.id.get() as i64;
+
+    if !db::repositories::primary_channel::exists(channel_id, &ctx.data().db).await? {
+        ctx.send(
+            poise::CreateReply::default()
+                .content(format!(
+                    "<#{}> is not a registered trigger channel.",
+                    channel.id
+                ))
+                .ephemeral(true),
+        )
+        .await?;
+        return Ok(());
+    }
+
+    let active =
+        db::repositories::temporary_channel::list_by_primary_channel(channel_id, &ctx.data().db)
+            .await?;
+
+    if !active.is_empty() {
+        const MAX_SHOWN: usize = 10;
+        let shown = active.len().min(MAX_SHOWN);
+        let mut mention_list: String = active[..shown]
+            .iter()
+            .map(|c| format!("<#{}>", c.id as u64))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if active.len() > MAX_SHOWN {
+            mention_list.push_str(&format!(" and {} more", active.len() - MAX_SHOWN));
+        }
+        ctx.send(
+            poise::CreateReply::default()
+                .content(format!(
+                    "Cannot remove <#{}>: {} active temp channel(s) were created from it: {}\n\
+                     Wait for them to empty or run `rustvoice cleanup` first.",
+                    channel.id,
+                    active.len(),
+                    mention_list
+                ))
+                .ephemeral(true),
+        )
+        .await?;
+        return Ok(());
+    }
+
+    db::repositories::primary_channel::delete(channel_id, &ctx.data().db).await?;
+
+    ctx.say(format!(
+        "<#{}> is no longer an auto-voice trigger.",
+        channel.id
+    ))
+    .await?;
+    Ok(())
+}
+
+async fn is_owner(ctx: Context<'_>) -> Result<bool, Error> {
+    Ok(ctx.data().owner_id == Some(ctx.author().id))
+}
+
 async fn has_manage_channels(ctx: Context<'_>) -> Result<bool, Error> {
     let author_id = ctx.author().id;
     let Some(guild) = ctx.guild() else {
