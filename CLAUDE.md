@@ -101,8 +101,20 @@ missing path. `db::connection::connect_raw` connects without running migrations
 **Voice channel lifecycle**: All `VoiceStateUpdate` events go through
 `events/voice_state.rs`. Join a primary channel → create temp channel + move
 user + insert DB row. Leave a temp channel → if empty, delete Discord channel +
-delete DB row. `activity::suggested_name` is called on every membership change
-and renames the channel if ≥ 50 % of members share a game.
+delete DB row (also deletes the associated `[join ↑]` channel if one exists).
+`activity::suggested_name` is called on every membership change and renames the
+channel if ≥ 50 % of members share a game.
+
+**Join request flow**: `/private` denies `@everyone CONNECT` on the temp channel
+and creates a companion `[join ↑]` voice channel in the same category with an
+explicit `@everyone CONNECT allow` (so it stays joinable even under a restricted
+category). The join channel's Discord ID is stored in `temporary_channels.join_channel_id`.
+When someone joins `[join ↑]`, `on_join` detects it via `find_by_join_channel` and
+posts an Allow/Deny button message in the private channel's text-in-voice area.
+A `tokio::spawn`-ed task drives a `ComponentInteractionCollector` (120 s timeout);
+only members currently in the private channel can respond. Allow moves the
+requester in; Deny disconnects them. `/public` deletes the `[join ↑]` channel and
+clears the DB field before removing the permission override.
 
 **Daemon**: `rustvoice daemon start` forks before Tokio starts (in `main()`,
 not inside `Cli::run()`). This is intentional — forking a multi-threaded Tokio
@@ -115,9 +127,10 @@ file.
 **Startup cleanup**: On reconnect, `events/mod.rs` handles each `GuildCreate`
 event (guard `is_new != Some(true)`) and calls `startup_cleanup`. It checks every
 `temporary_channel` DB row for that guild: if the Discord channel no longer
-exists → remove DB row only; if it exists but is empty (per `guild.voice_states`)
-→ delete the channel and the DB row. This handles channels that went empty while
-the bot was offline.
+exists → remove DB row only (best-effort delete of the associated `[join ↑]`
+channel first); if it exists but is empty (per `guild.voice_states`) → delete
+both the `[join ↑]` channel and the temp channel, then remove the DB row. This
+handles channels that went empty while the bot was offline.
 
 **IPC cleanup**: `rustvoice cleanup` → `Request::Cleanup` → `ipc_server::cleanup`.
 Requires the bot to be ready (uses `Arc<OnceLock<BotContext>>`). For each
@@ -163,6 +176,13 @@ The healthcheck uses `rustvoice daemon status` which connects to the IPC socket 
 
 ## CI/CD
 
-`.github/workflows/docker.yml` builds and pushes to GHCR on every push to `main` or a `v*` tag.
-Tags applied: `latest` and the version from `crates/rustvoice/Cargo.toml`.
-`GITHUB_TOKEN` with `packages: write` is the only credential required — no manual secrets needed for a personal repo.
+`.github/workflows/ci.yml` runs on every pull request: `cargo fmt --all -- --check`,
+`cargo clippy --workspace -- -D warnings`, and `cargo test --workspace`. The Clippy
+and Test jobs install `libsqlite3-dev` because SeaORM links against the system SQLite.
+Use `Swatinem/rust-cache@v2` to share Cargo caches across runs.
+
+`.github/workflows/docker.yml` builds and pushes to GHCR on every push to `main` or
+a `v*` tag. Tags applied: `latest` (on `main`) and semver tags from the git tag (e.g.
+`v0.2.0` → `0.2.0` and `0.2`). Uses `docker/metadata-action@v5` for tag extraction
+and `type=gha` BuildKit layer cache. `GITHUB_TOKEN` with `packages: write` is the
+only credential required — no manual secrets needed for a personal repo.
