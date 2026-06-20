@@ -27,7 +27,10 @@ pub async fn rename(
 async fn user_temp_channel(
     ctx: Context<'_>,
 ) -> Result<Option<poise::serenity_prelude::ChannelId>, Error> {
-    let guild = ctx.guild().ok_or("Not in a guild")?.clone();
+    let guild = ctx
+        .guild()
+        .ok_or_else(|| Error::Other("Not in a guild".to_string()))?
+        .clone();
     let Some(voice_state) = guild.voice_states.get(&ctx.author().id) else {
         return Ok(None);
     };

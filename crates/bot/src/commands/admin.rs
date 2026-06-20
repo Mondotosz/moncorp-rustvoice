@@ -41,7 +41,9 @@ pub async fn init(
 #[poise::command(slash_command, guild_only, check = "has_manage_channels")]
 pub async fn permissions(ctx: Context<'_>) -> Result<(), Error> {
     let bot_perms = {
-        let guild = ctx.guild().ok_or("Not in a guild")?;
+        let guild = ctx
+            .guild()
+            .ok_or_else(|| Error::Other("Not in a guild".to_string()))?;
         let bot_id = ctx.serenity_context().cache.current_user().id;
         guild
             .members

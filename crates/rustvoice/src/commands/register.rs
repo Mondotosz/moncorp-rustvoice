@@ -13,9 +13,7 @@ pub async fn run(guild_flag: Option<u64>, force_global: bool) -> Result<()> {
         })
     };
 
-    bot::register_commands(&token, guild_id)
-        .await
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    bot::register_commands(&token, guild_id).await?;
 
     match guild_id {
         Some(id) => println!("Commands registered in guild {id}."),

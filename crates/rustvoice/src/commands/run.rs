@@ -6,8 +6,6 @@ pub async fn run() -> Result<()> {
     let socket = ipc::default_socket_path();
 
     let db = db::connection::connect(&db_url).await?;
-    bot::run(token, db, socket)
-        .await
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    bot::run(token, db, socket).await?;
     Ok(())
 }

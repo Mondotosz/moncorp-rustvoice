@@ -1,17 +1,18 @@
-use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbErr};
+use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use sea_orm_migration::MigratorTrait;
 
+use crate::error::DbError;
 use crate::migrator::Migrator;
 
 /// Connect without running migrations — useful for checking migration status.
-pub async fn connect_raw(database_url: &str) -> Result<DatabaseConnection, DbErr> {
+pub async fn connect_raw(database_url: &str) -> Result<DatabaseConnection, DbError> {
     ensure_sqlite_dir(database_url)?;
     let mut opts = ConnectOptions::new(database_url);
     opts.max_connections(5).sqlx_logging(false);
-    Database::connect(opts).await
+    Ok(Database::connect(opts).await?)
 }
 
-pub async fn connect(database_url: &str) -> Result<DatabaseConnection, DbErr> {
+pub async fn connect(database_url: &str) -> Result<DatabaseConnection, DbError> {
     ensure_sqlite_dir(database_url)?;
 
     let mut opts = ConnectOptions::new(database_url);
@@ -24,7 +25,7 @@ pub async fn connect(database_url: &str) -> Result<DatabaseConnection, DbErr> {
 }
 
 /// For `sqlite:path` URLs, create the parent directory and the database file if they don't exist.
-fn ensure_sqlite_dir(url: &str) -> Result<(), DbErr> {
+fn ensure_sqlite_dir(url: &str) -> Result<(), DbError> {
     // Strip "sqlite:" and any leading slashes (e.g. "sqlite:./foo", "sqlite:///abs/foo").
     let after_scheme = match url.strip_prefix("sqlite:") {
         Some(p) => p,
@@ -50,8 +51,7 @@ fn ensure_sqlite_dir(url: &str) -> Result<(), DbErr> {
     // Create parent directories first.
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| DbErr::Custom(format!("cannot create database directory: {e}")))?;
+            std::fs::create_dir_all(parent)?;
         }
     }
 
@@ -61,8 +61,7 @@ fn ensure_sqlite_dir(url: &str) -> Result<(), DbErr> {
             .create(true)
             .truncate(false)
             .write(true)
-            .open(path)
-            .map_err(|e| DbErr::Custom(format!("cannot create database file: {e}")))?;
+            .open(path)?;
     }
 
     Ok(())

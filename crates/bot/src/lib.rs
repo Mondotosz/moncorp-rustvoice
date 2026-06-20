@@ -7,6 +7,7 @@ use db::DatabaseConnection;
 pub mod activity;
 pub mod client;
 pub mod commands;
+pub mod error;
 pub mod events;
 pub mod ipc_server;
 pub mod permissions;
@@ -24,8 +25,10 @@ pub struct Data {
     pub start_time: std::time::Instant,
 }
 
-/// Boxed, thread-safe error type returned by all command functions.
-pub type Error = Box<dyn std::error::Error + Send + Sync>;
+pub use error::BotError;
+
+/// Concrete error type returned by all command functions and public bot APIs.
+pub type Error = BotError;
 /// Poise context for guild-only slash commands, parameterised with [`Data`] and [`Error`].
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 
