@@ -22,11 +22,9 @@ pub async fn profile(
 
     let xp = profile.as_ref().map(|p| p.xp).unwrap_or(0);
     let total_seconds = profile.as_ref().map(|p| p.total_voice_seconds).unwrap_or(0);
-    let streak = profile.as_ref().map_or(0, |p| {
-        match p.last_daily_at {
-            Some(t) if now - t <= 26 * 3600 => p.streak,
-            _ => 0,
-        }
+    let streak = profile.as_ref().map_or(0, |p| match p.last_daily_at {
+        Some(t) if now - t <= 26 * 3600 => p.streak,
+        _ => 0,
     });
 
     let level = leveling::level_from_xp(xp);

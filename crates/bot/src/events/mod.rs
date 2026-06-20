@@ -44,8 +44,7 @@ async fn startup_cleanup(
         .unwrap_or_default()
         .as_secs() as i64;
 
-    let channels =
-        db::repositories::temporary_channel::list_by_guild(gid, &data.db).await?;
+    let channels = db::repositories::temporary_channel::list_by_guild(gid, &data.db).await?;
 
     // Track which temp channel Discord IDs still exist, for session recovery below.
     let mut live_temp_ids: HashSet<u64> = HashSet::new();
@@ -95,8 +94,7 @@ async fn startup_cleanup(
 
     // Award XP for sessions that ended while the bot was offline, then discard them.
     // Sessions belonging to users still in a live temp channel are preserved.
-    let sessions =
-        db::repositories::voice_session::list_by_guild(gid, &data.db).await?;
+    let sessions = db::repositories::voice_session::list_by_guild(gid, &data.db).await?;
 
     if !sessions.is_empty() {
         // Users currently sitting in a temp channel — their session stays open.
