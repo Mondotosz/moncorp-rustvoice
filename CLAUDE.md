@@ -198,8 +198,11 @@ response line). The daemon side (`bot/src/ipc_server.rs`) listens; CLI
 subcommands (`daemon status`, `stats`, `cleanup`) connect as clients via
 `ipc::client::IpcClient`.
 
-**Logging**: `tracing` + `tracing-subscriber`. Verbosity driven by `-v` count on
-the CLI (0 = ERROR … 4 = TRACE).
+**Logging**: `tracing` + `tracing-subscriber`. `RUST_LOG` is the primary control
+when set (takes full ownership of the filter, supports target-specific directives
+like `RUST_LOG=bot=debug,warn`); the `-v` count (0 = ERROR … 4 = TRACE) is the
+fallback for local dev when `RUST_LOG` is absent. In Docker Compose,
+`RUST_LOG` defaults to `info` via `${RUST_LOG:-info}` in `compose.yaml`.
 
 ## Environment
 
@@ -211,6 +214,7 @@ Copy `.env.example` to `.env`:
 | `DISCORD_SERVER_ID` | Guild snowflake (used for dev guild-scoped command registration)        |
 | `DATABASE_URL`      | `sqlite:./db.sqlite` or an absolute path                                |
 | `IPC_SOCKET_PATH`   | Unix socket path; defaults to `$XDG_RUNTIME_DIR/rustvoice.sock` (see `ipc::default_socket_path`) |
+| `RUST_LOG`          | Log filter; overrides `-v` when set. E.g. `info`, `bot=debug,warn`. Defaults to `info` in Compose. |
 
 ## Docker
 
