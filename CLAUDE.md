@@ -36,6 +36,9 @@ cargo run -p rustvoice -- db fresh    # drop all tables and reapply (dev reset)
 # Re-register slash commands with Discord
 cargo run -p rustvoice -- register              # guild-scoped (instant) if DISCORD_SERVER_ID set
 cargo run -p rustvoice -- register --global     # force global (up to 1 h propagation)
+
+# Generate an OAuth2 invite URL with all required bot permissions
+cargo run -p rustvoice -- invite
 ```
 
 ## Architecture
@@ -44,12 +47,14 @@ Cargo workspace with four crates under `crates/`:
 
 - **`rustvoice`** (binary) — `clap` CLI. Subcommands: `setup [db]`, `run`,
   `daemon {start,stop,status}`, `db {status,up,down,fresh,refresh,reset}`,
-  `register [--global] [--guild <id>]`, `stats`, `cleanup`. No Discord or
-  database logic lives here.
+  `register [--global] [--guild <id>]`, `stats`, `cleanup`, `invite`. No Discord or
+  database logic lives here. Uses `anyhow` for error propagation.
 - **`bot`** (library) — All Discord interaction. Poise slash commands under
   `commands/`, Serenity event handlers under `events/`. `activity.rs` computes
   activity-based channel names from member presences. `ipc_server.rs` starts a
-  Unix socket server so the CLI can query the running bot.
+  Unix socket server so the CLI can query the running bot. `permissions.rs` is the
+  single source of truth for all permission metadata, the `BotPermissionError` type,
+  and the `PermissionResultExt` trait. Uses `thiserror` for error types.
 - **`db`** (library) — SeaORM entities (`guilds`, `primary_channels`,
   `temporary_channels`) in `entities/`, thin async wrappers in `repositories/`.
   `connection.rs` builds the pool and runs migrations. `management.rs` exposes
@@ -57,7 +62,8 @@ Cargo workspace with four crates under `crates/`:
   + `migrations/` contain the embedded migration list.
 - **`ipc`** (library) — Shared `Request`/`Response` protocol types in
   `protocol.rs`, a Tokio `UnixListener` server helper in `server.rs`, and a
-  `UnixStream` client helper in `client.rs`. Used by `bot` (server side) and
+  `UnixStream` client helper in `client.rs`. `IpcError` (thiserror enum) is the
+  typed error for `IpcClient::send`. Used by `bot` (server side) and
   `rustvoice` (client side).
 
 ## Key Patterns
@@ -79,13 +85,26 @@ global commands. Without it, commands are registered globally. Use
 `rustvoice register` to force re-registration without restarting the bot.
 `bot::client::all_commands()` is the single source of truth for the command list.
 
-**Permission guard**: The `/init` admin command uses a `check` function
-(`has_manage_channels`) instead of `required_permissions` so the error message
-can be customised. The channel parameter is restricted to voice channels via
+**Permission guard**: The `/init` and `/permissions` admin commands use a `check`
+function (`has_manage_channels`) instead of `required_permissions` so the error
+message can be customised. The channel parameter is restricted to voice channels via
 `#[channel_types("Voice")]` plus a server-side type check.
 
+**Permission system**: `bot/src/permissions.rs` is the single source of truth.
+It defines `PermissionEntry` (metadata per permission), `ENTRIES` (display-ordered
+slice), `CORE`/`PRIVACY`/`ALL` permission set constants, `BotPermissionError`
+(thiserror struct that carries `required: &'static [Permissions]` and
+`required_names: String` pre-computed at creation), and the `PermissionResultExt`
+trait whose `.requires(&[Permissions::X])` method wraps any
+`Result<T, serenity::Error>` at the call site. Every Discord API call that can fail
+with 50013 annotates itself this way. `bot::invite_url()` in `lib.rs` uses
+`permissions::ALL.bits()` to generate the OAuth2 URL.
+
 **Error handling**: `client::on_error` distinguishes `FrameworkError::Command`
-(logs the inner error, sends ephemeral reply to user) from
+(downcasts to `BotPermissionError` first; if matched, computes which required
+permissions are actually missing from the bot's cached guild permissions and shows
+a precise ephemeral message; if `MANAGE_ROLES` is missing, adds a note that it can
+be granted at the voice category level instead of server-wide) from
 `FrameworkError::CommandCheckFailed` (sends "no permission" ephemeral). All
 command errors are surfaced to the invoking user as ephemeral messages.
 
@@ -105,7 +124,10 @@ delete DB row (also deletes the associated `[join ↑]` channel if one exists).
 `activity::suggested_name` is called on every membership change and renames the
 channel if ≥ 50 % of members share a game.
 
-**Join request flow**: `/private` denies `@everyone CONNECT` on the temp channel
+**Join request flow**: `/private` first creates a member-level overwrite for the bot
+on the channel (allowing `VIEW_CHANNEL | CONNECT | MANAGE_CHANNELS | MANAGE_ROLES`)
+so that category-level permission grants are preserved and the subsequent
+`@everyone CONNECT` deny cannot lock the bot out. It then denies `@everyone CONNECT`
 and creates a companion `[join ↑]` voice channel in the same category with an
 explicit `@everyone CONNECT allow` (so it stays joinable even under a restricted
 category). The join channel's Discord ID is stored in `temporary_channels.join_channel_id`.
@@ -113,8 +135,9 @@ When someone joins `[join ↑]`, `on_join` detects it via `find_by_join_channel`
 posts an Allow/Deny button message in the private channel's text-in-voice area.
 A `tokio::spawn`-ed task drives a `ComponentInteractionCollector` (120 s timeout);
 only members currently in the private channel can respond. Allow moves the
-requester in; Deny disconnects them. `/public` deletes the `[join ↑]` channel and
-clears the DB field before removing the permission override.
+requester in; Deny disconnects them. `/public` deletes the `[join ↑]` channel,
+clears the DB field, and removes the `@everyone` deny — the bot's member overwrite
+is intentionally kept so it never loses its channel-level permissions.
 
 **Daemon**: `rustvoice daemon start` forks before Tokio starts (in `main()`,
 not inside `Cli::run()`). This is intentional — forking a multi-threaded Tokio
