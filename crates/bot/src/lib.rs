@@ -10,6 +10,7 @@ pub mod commands;
 pub mod error;
 pub mod events;
 pub mod ipc_server;
+pub mod leveling;
 pub mod permissions;
 
 /// HTTP + cache handles shared between the IPC server and event handlers.

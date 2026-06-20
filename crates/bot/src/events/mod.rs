@@ -3,6 +3,7 @@ use poise::serenity_prelude as serenity;
 use crate::{Data, Error};
 
 mod voice_state;
+mod xp;
 
 pub async fn handle(
     ctx: &serenity::Context,
@@ -83,6 +84,23 @@ async fn startup_cleanup(
         tracing::info!(
             "Startup cleanup for guild {guild_id}: removed {removed} stale/empty temp channel(s)"
         );
+    }
+
+    // Remove voice sessions for users who are no longer in any voice channel.
+    // Sessions for users still in voice are kept intact (joined_at preserved).
+    let active_user_ids: Vec<i64> = guild
+        .voice_states
+        .keys()
+        .map(|id| id.get() as i64)
+        .collect();
+    if let Err(e) = db::repositories::voice_session::delete_orphaned(
+        guild_id.get() as i64,
+        &active_user_ids,
+        &data.db,
+    )
+    .await
+    {
+        tracing::warn!("Startup cleanup: voice session orphan removal failed for guild {guild_id}: {e}");
     }
 
     Ok(())

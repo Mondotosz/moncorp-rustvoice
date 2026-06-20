@@ -1,0 +1,78 @@
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, Set,
+};
+use sea_orm::sea_query::OnConflict;
+
+use crate::entities::user_profile::{self, Entity as UserProfile};
+use crate::error::DbError;
+
+pub async fn upsert(user_id: i64, guild_id: i64, db: &DatabaseConnection) -> Result<(), DbError> {
+    let model = user_profile::ActiveModel {
+        user_id: Set(user_id),
+        guild_id: Set(guild_id),
+        xp: Set(0),
+        total_voice_seconds: Set(0),
+        last_daily_at: Set(None),
+    };
+    match UserProfile::insert(model)
+        .on_conflict(
+            OnConflict::columns([user_profile::Column::UserId, user_profile::Column::GuildId])
+                .do_nothing()
+                .to_owned(),
+        )
+        .exec(db)
+        .await
+    {
+        Ok(_) | Err(DbErr::RecordNotInserted) => Ok(()),
+        Err(e) => Err(DbError::from(e)),
+    }
+}
+
+pub async fn get(
+    user_id: i64,
+    guild_id: i64,
+    db: &DatabaseConnection,
+) -> Result<Option<user_profile::Model>, DbError> {
+    Ok(UserProfile::find()
+        .filter(user_profile::Column::UserId.eq(user_id))
+        .filter(user_profile::Column::GuildId.eq(guild_id))
+        .one(db)
+        .await?)
+}
+
+pub async fn add_xp(
+    user_id: i64,
+    guild_id: i64,
+    xp_delta: i64,
+    seconds_delta: i64,
+    db: &DatabaseConnection,
+) -> Result<(), DbError> {
+    upsert(user_id, guild_id, db).await?;
+    let current = get(user_id, guild_id, db).await?.unwrap();
+    let model = user_profile::ActiveModel {
+        user_id: Set(user_id),
+        guild_id: Set(guild_id),
+        xp: Set(current.xp + xp_delta),
+        total_voice_seconds: Set(current.total_voice_seconds + seconds_delta),
+        ..Default::default()
+    };
+    model.update(db).await?;
+    Ok(())
+}
+
+pub async fn set_last_daily(
+    user_id: i64,
+    guild_id: i64,
+    timestamp: i64,
+    db: &DatabaseConnection,
+) -> Result<(), DbError> {
+    upsert(user_id, guild_id, db).await?;
+    let model = user_profile::ActiveModel {
+        user_id: Set(user_id),
+        guild_id: Set(guild_id),
+        last_daily_at: Set(Some(timestamp)),
+        ..Default::default()
+    };
+    model.update(db).await?;
+    Ok(())
+}

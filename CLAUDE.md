@@ -56,14 +56,18 @@ Cargo workspace with four crates under `crates/`:
   `BotError` (thiserror enum), the concrete error type used by all commands and
   public APIs. `permissions.rs` is the single source of truth for all permission
   metadata, the `BotPermissionError` type (one variant of `BotError`), and the
-  `PermissionResultExt` trait.
+  `PermissionResultExt` trait. `leveling.rs` implements the XP formula and helper
+  functions (`xp_for_level`, `level_from_xp`, `format_duration`, `progress_bar`).
+  `events/xp.rs` handles XP accrual and daily bonus on voice state transitions.
 - **`db`** (library) — SeaORM entities (`guilds`, `primary_channels`,
-  `temporary_channels`) in `entities/`, thin async wrappers in `repositories/`.
-  `error.rs` defines `DbError` (thiserror enum with `Db(sea_orm::DbErr)` and
-  `Io(std::io::Error)` variants) — all public functions return `Result<_, DbError>`.
-  `connection.rs` builds the pool and runs migrations. `management.rs` exposes
-  migration operations (status, up, down, fresh, refresh, reset). `migrator.rs`
-  + `migrations/` contain the embedded migration list.
+  `temporary_channels`, `user_profiles`, `voice_sessions`) in `entities/`, thin
+  async wrappers in `repositories/`. `error.rs` defines `DbError` (thiserror enum
+  with `Db(sea_orm::DbErr)` and `Io(std::io::Error)` variants) — all public
+  functions return `Result<_, DbError>`. `connection.rs` builds the pool and runs
+  migrations. `management.rs` exposes migration operations (status, up, down,
+  fresh, refresh, reset). `migrator.rs` + `migrations/` contain the embedded
+  migration list. `user_profiles` and `voice_sessions` both use composite primary
+  keys `(user_id, guild_id)`.
 - **`ipc`** (library) — Shared `Request`/`Response` protocol types in
   `protocol.rs`, a Tokio `UnixListener` server helper in `server.rs`, and a
   `UnixStream` client helper in `client.rs`. `IpcError` (thiserror enum) is the
@@ -122,6 +126,17 @@ functions in `db/src/repositories/`. `db::connection::connect` auto-creates
 parent directories and touches the file before opening so SQLite never sees a
 missing path. `db::connection::connect_raw` connects without running migrations
 (used by `db status` and migration checks in setup).
+
+**XP and leveling**: `bot/src/leveling.rs` defines the XP curve: geometric
+progression (BASE=3600s, GROWTH=1.047) for levels 1–100 so level 1→2 costs 1h and
+level 100 ≈ 2000h total; arithmetic +24h per level beyond 100. XP is stored in
+seconds (1s of voice = 1 XP). The daily bonus (3600 XP ≈ 1h) is awarded
+automatically on the first join of a bot-managed temp channel per 24h window, via
+`events/xp.rs::handle_voice_transition`. `/profile [user]` shows an embed with
+level, XP progress bar (Unicode `█`/`░`), and total voice time.
+`user_profiles(user_id, guild_id)` holds XP and last-daily timestamp;
+`voice_sessions(user_id, guild_id)` tracks active session join times. On startup
+cleanup, sessions for users no longer in voice are discarded.
 
 **Voice channel lifecycle**: All `VoiceStateUpdate` events go through
 `events/voice_state.rs`. Join a primary channel → create temp channel + move

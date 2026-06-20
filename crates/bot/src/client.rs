@@ -9,6 +9,7 @@ pub fn all_commands() -> Vec<poise::Command<Data, Error>> {
     vec![
         crate::commands::admin::init(),
         crate::commands::admin::permissions(),
+        crate::commands::profile::profile(),
         crate::commands::voice::rename(),
         crate::commands::voice::limit(),
         crate::commands::voice::unlimit(),
