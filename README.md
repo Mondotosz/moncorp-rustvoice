@@ -16,7 +16,10 @@ A Discord bot that creates temporary voice channels on demand and names them aft
 | Command | Who | Description |
 |---|---|---|
 | `/init <channel>` | Admin (Manage Channels) | Register a voice channel as a trigger |
+| `/triggers` | Admin (Manage Channels) | List all registered trigger channels in this server |
+| `/remove-trigger <channel>` | Admin (Manage Channels) | Remove a trigger channel (does not delete the Discord channel) |
 | `/permissions` | Admin (Manage Channels) | Show bot permission status for this server (🟢 granted / 🟠 optional missing / 🔴 core missing) |
+| `/register` | Bot owner (`DISCORD_OWNER_ID`) | Re-register slash commands globally with Discord |
 | `/rename <name>` | Anyone in a temp channel | Rename your current channel |
 | `/limit <n>` | Anyone in a temp channel | Set a user limit (0 = unlimited) |
 | `/unlimit` | Anyone in a temp channel | Remove the user limit |
@@ -123,6 +126,7 @@ Copy `.env.example` to `.env` and fill in the values:
 | `DISCORD_TOKEN` | Yes | Bot token from the Developer Portal |
 | `DATABASE_URL` | Yes | SQLite path, e.g. `sqlite:./db.sqlite` |
 | `DISCORD_SERVER_ID` | No | Guild snowflake — enables instant slash command registration during development |
+| `DISCORD_OWNER_ID` | No | Discord user ID of the bot owner — enables the `/register` slash command |
 | `IPC_SOCKET_PATH` | No | Defaults to `$XDG_RUNTIME_DIR/rustvoice.sock`, then `~/.local/run/`, then `/tmp/` |
 
 #### Database

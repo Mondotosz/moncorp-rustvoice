@@ -77,26 +77,36 @@ Cargo workspace with four crates under `crates/`:
 ## Key Patterns
 
 **Setup TUI**: `rustvoice setup` launches a `ratatui`/`crossterm` full-screen
-form. Navigate with `↑↓` or `Ctrl+P`/`Ctrl+N`, `Enter` to edit a field,
-`Ctrl+S` to save. After saving, prompts to apply pending migrations — the DB URL
-is read directly from the saved field value, not from the process environment
-(which still holds the pre-TUI value).
+form with fields for `DISCORD_TOKEN`, `DISCORD_SERVER_ID`, `DISCORD_OWNER_ID`,
+`DATABASE_URL`, and `IPC_SOCKET_PATH`. Navigate with `↑↓` or `Ctrl+P`/`Ctrl+N`,
+`Enter` to edit a field, `Ctrl+S` to save. After saving, prompts to apply pending
+migrations — the DB URL is read directly from the saved field value, not from the
+process environment (which still holds the pre-TUI value).
 
 **Discord library**: Poise 0.6.2 on top of Serenity 0.12.5. Slash commands use
 `#[poise::command(slash_command, guild_only)]`. The shared state
-`Data { db, start_time }` is in `bot/src/lib.rs`. `Error` and `Context<'a>` type
-aliases are also defined there and imported throughout the crate.
+`Data { db, start_time, owner_id: Option<UserId> }` is in `bot/src/lib.rs`.
+`owner_id` is read from `DISCORD_OWNER_ID` at startup and used to restrict
+`/register` to the configured bot owner. `Error` and `Context<'a>` type aliases are
+also defined there and imported throughout the crate.
 
 **Slash command registration**: On startup, when `DISCORD_SERVER_ID` is set the
 bot registers commands in that guild only (instant propagation) and clears all
 global commands. Without it, commands are registered globally. Use
-`rustvoice register` to force re-registration without restarting the bot.
-`bot::client::all_commands()` is the single source of truth for the command list.
+`rustvoice register` (CLI) or the `/register` slash command (owner-only) to force
+re-registration without restarting the bot. `bot::client::all_commands()` is the
+single source of truth for the command list. The standalone `register_commands`
+function in `bot/src/lib.rs` calls `http.get_current_user()` then
+`http.set_application_id()` before registering, because `Http::new(token)` leaves
+the application ID unset.
 
-**Permission guard**: The `/init` and `/permissions` admin commands use a `check`
-function (`has_manage_channels`) instead of `required_permissions` so the error
-message can be customised. The channel parameter is restricted to voice channels via
-`#[channel_types("Voice")]` plus a server-side type check.
+**Permission guard**: The `/init`, `/permissions`, `/triggers`, and
+`/remove-trigger` admin commands use a `check` function (`has_manage_channels`)
+instead of `required_permissions` so the error message can be customised. The
+`/register` command uses a separate `is_owner` check that compares the invoker's ID
+against `ctx.data().owner_id`. Check failures are handled by the existing
+`CommandCheckFailed` arm in `on_error`. Channel parameters are restricted to voice
+channels via `#[channel_types("Voice")]` plus a server-side type check.
 
 **Permission system**: `bot/src/permissions.rs` is the single source of truth.
 It defines `PermissionEntry` (metadata per permission), `ENTRIES` (display-ordered
@@ -212,6 +222,7 @@ Copy `.env.example` to `.env`:
 | ------------------- | ----------------------------------------------------------------------- |
 | `DISCORD_TOKEN`     | Bot token from Discord Developer Portal                                 |
 | `DISCORD_SERVER_ID` | Guild snowflake (used for dev guild-scoped command registration)        |
+| `DISCORD_OWNER_ID`  | Discord user ID of the bot owner; enables the `/register` slash command (optional — warning logged if absent) |
 | `DATABASE_URL`      | `sqlite:./db.sqlite` or an absolute path                                |
 | `IPC_SOCKET_PATH`   | Unix socket path; defaults to `$XDG_RUNTIME_DIR/rustvoice.sock` (see `ipc::default_socket_path`) |
 | `RUST_LOG`          | Log filter; overrides `-v` when set. E.g. `info`, `bot=debug,warn`. Defaults to `info` in Compose. |

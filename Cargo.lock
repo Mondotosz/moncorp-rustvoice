@@ -250,7 +250,7 @@ dependencies = [
 
 [[package]]
 name = "bot"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "db",
  "dotenvy",
@@ -662,7 +662,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "db"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "sea-orm",
@@ -1384,7 +1384,7 @@ dependencies = [
 
 [[package]]
 name = "ipc"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2424,7 +2424,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
 name = "rustvoice"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "bot",
