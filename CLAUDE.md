@@ -130,15 +130,21 @@ missing path. `db::connection::connect_raw` connects without running migrations
 **XP and leveling**: `bot/src/leveling.rs` defines the XP curve: geometric
 progression (BASE=3600s, GROWTH=1.047) for levels 1–100 so level 1→2 costs 1h and
 level 100 ≈ 2000h total; arithmetic +24h per level beyond 100. XP is stored in
-seconds (1s of voice = 1 XP). The daily bonus (3600 XP ≈ 1h) is awarded
-automatically on the first join of a bot-managed temp channel per 24h window, via
-`events/xp.rs::handle_voice_transition`. `/profile [user]` shows an embed with
-level, XP progress bar (Unicode `█`/`░`), and total voice time. `/ranking` shows
-the server leaderboard sorted by XP with ◀/▶ button pagination (10 per page, 60 s
-timeout, buttons auto-disabled on expiry).
-`user_profiles(user_id, guild_id)` holds XP and last-daily timestamp;
-`voice_sessions(user_id, guild_id)` tracks active session join times. On startup
-cleanup, sessions for users no longer in voice are discarded.
+seconds (1s of voice = 1 XP). A voice session must last at least 60 s before any
+XP is awarded. The daily bonus (3600 XP ≈ 1h) is awarded on the first join of a
+bot-managed temp channel inside a ±2 h grace window around the 24 h cadence: eligible
+at 22 h, in-window up to 26 h. When in-window, `last_daily_at` is advanced by exactly
+24 h (not set to `now`), keeping the anchor stable. Missing the window resets the
+streak to 1. All daily bonus logic lives in `events/xp.rs::award_daily_bonus_if_eligible`.
+`/profile [user]` shows an embed with level, XP progress bar (Unicode `█`/`░`),
+total voice time, and a streak counter (`🔥 N` or `—`). The streak displayed is
+computed at request time: 0 if `last_daily_at` is more than 26 h ago. `/ranking`
+shows the server leaderboard sorted by XP with ◀/▶ button pagination (10 per page,
+60 s timeout, buttons auto-disabled on expiry).
+`user_profiles(user_id, guild_id)` holds XP, voice seconds, last-daily timestamp,
+and streak counter; `voice_sessions(user_id, guild_id)` tracks active session join
+times. On bot reconnect, open sessions for users who left while offline receive XP
+(capped at 4 h, minimum 60 s); sessions for users still in a temp channel are preserved.
 
 **Voice channel lifecycle**: All `VoiceStateUpdate` events go through
 `events/voice_state.rs`. Join a primary channel → create temp channel + move
@@ -175,8 +181,11 @@ event (guard `is_new != Some(true)`) and calls `startup_cleanup`. It checks ever
 `temporary_channel` DB row for that guild: if the Discord channel no longer
 exists → remove DB row only (best-effort delete of the associated `[join ↑]`
 channel first); if it exists but is empty (per `guild.voice_states`) → delete
-both the `[join ↑]` channel and the temp channel, then remove the DB row. This
-handles channels that went empty while the bot was offline.
+both the `[join ↑]` channel and the temp channel, then remove the DB row. After
+processing temp channels, all open `voice_sessions` for that guild are inspected:
+sessions whose user is still in a live temp channel are kept intact; sessions for
+users who left while the bot was offline award XP capped at 4 h (minimum 60 s) and
+are then deleted. This runs unconditionally even when there are no temp channel rows.
 
 **IPC cleanup**: `rustvoice cleanup` → `Request::Cleanup` → `ipc_server::cleanup`.
 Requires the bot to be ready (uses `Arc<OnceLock<BotContext>>`). For each
