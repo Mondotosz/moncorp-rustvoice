@@ -2,7 +2,7 @@ use poise::serenity_prelude::{
     self as serenity, ChannelType, PermissionOverwrite, PermissionOverwriteType, Permissions,
 };
 
-use crate::{Context, Error};
+use crate::{permissions::PermissionResultExt, Context, Error};
 
 /// Make your voice channel private. Creates a "[join ↑]" channel for join requests.
 #[poise::command(slash_command, guild_only)]
@@ -13,6 +13,27 @@ pub async fn private(ctx: Context<'_>) -> Result<(), Error> {
     };
 
     let everyone_id = ctx.guild_id().unwrap().everyone_role();
+    let bot_id = ctx.serenity_context().cache.current_user().id;
+
+    // Grant the bot explicit access first so the subsequent @everyone deny cannot lock it out.
+    // MANAGE_CHANNELS and MANAGE_ROLES are included so that category-level grants are preserved
+    // on this channel after the overwrite is applied (member overwrites replace inherited ones).
+    channel_id
+        .create_permission(
+            ctx,
+            PermissionOverwrite {
+                allow: Permissions::VIEW_CHANNEL
+                    | Permissions::CONNECT
+                    | Permissions::MANAGE_CHANNELS
+                    | Permissions::MANAGE_ROLES,
+                deny: Permissions::empty(),
+                kind: PermissionOverwriteType::Member(bot_id),
+            },
+        )
+        .await
+        .requires(&[Permissions::MANAGE_ROLES])?;
+
+    // Now deny @everyone from connecting to the channel.
     channel_id
         .create_permission(
             ctx,
@@ -22,7 +43,8 @@ pub async fn private(ctx: Context<'_>) -> Result<(), Error> {
                 kind: PermissionOverwriteType::Role(everyone_id),
             },
         )
-        .await?;
+        .await
+        .requires(&[Permissions::MANAGE_ROLES])?;
 
     // Create the companion join-request channel in the same category.
     let parent_id = ctx
@@ -46,7 +68,10 @@ pub async fn private(ctx: Context<'_>) -> Result<(), Error> {
         kind: PermissionOverwriteType::Role(everyone_id),
     }]);
 
-    let join_ch = guild_id.create_channel(ctx, builder).await?;
+    let join_ch = guild_id
+        .create_channel(ctx, builder)
+        .await
+        .requires(&[Permissions::MANAGE_CHANNELS])?;
 
     db::repositories::temporary_channel::set_join_channel(
         channel_id.get() as i64,
@@ -84,9 +109,14 @@ pub async fn public(ctx: Context<'_>) -> Result<(), Error> {
     }
 
     let everyone_id = ctx.guild_id().unwrap().everyone_role();
+
+    // Remove the @everyone CONNECT deny. The bot's member overwrite is intentionally left in
+    // place so it retains MANAGE_CHANNELS and MANAGE_ROLES on the channel even if those were
+    // only granted at the category level.
     channel_id
         .delete_permission(ctx, PermissionOverwriteType::Role(everyone_id))
-        .await?;
+        .await
+        .requires(&[Permissions::MANAGE_ROLES])?;
 
     ctx.say("Channel is now public.").await?;
     Ok(())

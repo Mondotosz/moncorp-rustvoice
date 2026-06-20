@@ -9,6 +9,7 @@ pub mod client;
 pub mod commands;
 pub mod events;
 pub mod ipc_server;
+pub mod permissions;
 
 /// HTTP + cache handles shared between the IPC server and event handlers.
 /// Populated once the bot fires its Ready event.
@@ -27,6 +28,17 @@ pub struct Data {
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 /// Poise context for guild-only slash commands, parameterised with [`Data`] and [`Error`].
 pub type Context<'a> = poise::Context<'a, Data, Error>;
+
+/// Generate the OAuth2 invite URL for this bot using the given token.
+pub async fn invite_url(token: &str) -> Result<String, Error> {
+    let http = poise::serenity_prelude::Http::new(token);
+    let user = http.get_current_user().await?;
+    let perms = permissions::ALL.bits();
+    Ok(format!(
+        "https://discord.com/oauth2/authorize?client_id={}&permissions={}&scope=bot+applications.commands",
+        user.id, perms
+    ))
+}
 
 /// Start the Discord bot and IPC server, blocking until shutdown.
 pub async fn run(token: String, db: DatabaseConnection, socket_path: String) -> Result<(), Error> {

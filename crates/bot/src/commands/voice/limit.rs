@@ -1,4 +1,6 @@
-use crate::{Context, Error};
+use poise::serenity_prelude::Permissions;
+
+use crate::{permissions::PermissionResultExt, Context, Error};
 
 /// Set a user limit (1–99) on your dynamic voice channel.
 #[poise::command(slash_command, guild_only)]
@@ -18,7 +20,8 @@ pub async fn limit(
             ctx,
             poise::serenity_prelude::builder::EditChannel::new().user_limit(count),
         )
-        .await?;
+        .await
+        .requires(&[Permissions::MANAGE_CHANNELS])?;
     ctx.say(format!("User limit set to **{count}**.")).await?;
     Ok(())
 }
@@ -35,7 +38,8 @@ pub async fn unlimit(ctx: Context<'_>) -> Result<(), Error> {
             ctx,
             poise::serenity_prelude::builder::EditChannel::new().user_limit(0),
         )
-        .await?;
+        .await
+        .requires(&[Permissions::MANAGE_CHANNELS])?;
     ctx.say("User limit removed.").await?;
     Ok(())
 }
