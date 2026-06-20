@@ -78,9 +78,15 @@ pub async fn permissions(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 async fn has_manage_channels(ctx: Context<'_>) -> Result<bool, Error> {
-    let Some(member) = ctx.author_member().await else {
+    let author_id = ctx.author().id;
+    let Some(guild) = ctx.guild() else {
         return Ok(false);
     };
-    let permissions = member.permissions(ctx)?;
-    Ok(permissions.manage_channels())
+    let Some(member) = guild.members.get(&author_id) else {
+        return Ok(false);
+    };
+    let Some(channel) = guild.channels.get(&ctx.channel_id()) else {
+        return Ok(false);
+    };
+    Ok(guild.user_permissions_in(channel, member).manage_channels())
 }

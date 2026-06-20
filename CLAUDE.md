@@ -82,7 +82,7 @@ form. Navigate with `↑↓` or `Ctrl+P`/`Ctrl+N`, `Enter` to edit a field,
 is read directly from the saved field value, not from the process environment
 (which still holds the pre-TUI value).
 
-**Discord library**: Poise 0.6.1 on top of Serenity 0.12.2. Slash commands use
+**Discord library**: Poise 0.6.2 on top of Serenity 0.12.5. Slash commands use
 `#[poise::command(slash_command, guild_only)]`. The shared state
 `Data { db, start_time }` is in `bot/src/lib.rs`. `Error` and `Context<'a>` type
 aliases are also defined there and imported throughout the crate.
