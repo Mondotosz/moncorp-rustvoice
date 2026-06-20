@@ -15,9 +15,19 @@ pub async fn profile(
     let gid = guild_id.get() as i64;
 
     let profile = db::repositories::user_profile::get(uid, gid, &ctx.data().db).await?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
     let xp = profile.as_ref().map(|p| p.xp).unwrap_or(0);
     let total_seconds = profile.as_ref().map(|p| p.total_voice_seconds).unwrap_or(0);
-    let streak = profile.as_ref().map(|p| p.streak).unwrap_or(0);
+    let streak = profile.as_ref().map_or(0, |p| {
+        match p.last_daily_at {
+            Some(t) if now - t <= 26 * 3600 => p.streak,
+            _ => 0,
+        }
+    });
 
     let level = leveling::level_from_xp(xp);
     let xp_in_level = leveling::xp_in_level(xp);
