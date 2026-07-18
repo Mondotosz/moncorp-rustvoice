@@ -18,6 +18,7 @@ pub mod permissions;
 pub struct BotContext {
     pub http: Arc<serenity::Http>,
     pub cache: Arc<serenity::Cache>,
+    pub shard_manager: Arc<serenity::ShardManager>,
 }
 
 /// Shared state available to every poise command through the bot's [`Context`].
