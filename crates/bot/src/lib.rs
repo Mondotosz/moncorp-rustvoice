@@ -18,6 +18,7 @@ pub mod permissions;
 pub struct BotContext {
     pub http: Arc<serenity::Http>,
     pub cache: Arc<serenity::Cache>,
+    pub shard_manager: Arc<serenity::ShardManager>,
 }
 
 /// Shared state available to every poise command through the bot's [`Context`].
@@ -70,23 +71,9 @@ pub async fn run(token: String, db: DatabaseConnection, socket_path: String) -> 
 
     let ipc_db = db.clone();
     let ipc_bot_ctx = bot_ctx.clone();
-    tokio::spawn(ipc_server::serve(
-        socket_path,
-        ipc_db,
-        start_time,
-        ipc_bot_ctx,
-    ));
+    tokio::spawn(ipc_server::serve(socket_path, ipc_db, start_time, ipc_bot_ctx));
 
-    client::build_and_run(
-        token,
-        Data {
-            db,
-            start_time,
-            owner_id,
-        },
-        bot_ctx,
-    )
-    .await
+    client::build_and_run(token, Data { db, start_time, owner_id }, bot_ctx).await
 }
 
 /// Register slash commands without starting the full bot.

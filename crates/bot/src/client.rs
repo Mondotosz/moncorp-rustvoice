@@ -48,6 +48,7 @@ pub async fn build_and_run(
                     .set(BotContext {
                         http: ctx.http.clone(),
                         cache: ctx.cache.clone(),
+                        shard_manager: framework.shard_manager().clone(),
                     })
                     .ok();
                 tracing::info!("Bot ready");

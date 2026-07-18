@@ -35,14 +35,20 @@ async fn stop() -> Result<()> {
 async fn status() -> Result<()> {
     let mut client = IpcClient::connect(&ipc::default_socket_path()).await?;
     match client.send(Request::Status).await? {
-        Response::Status { uptime_secs } => {
+        Response::Status {
+            uptime_secs,
+            discord_ok,
+        } => {
             let h = uptime_secs / 3600;
             let m = (uptime_secs % 3600) / 60;
             let s = uptime_secs % 60;
             println!("Bot is running. Uptime: {h}h {m}m {s}s");
+            if !discord_ok {
+                anyhow::bail!("Discord gateway is not connected.");
+            }
         }
-        Response::Error(e) => eprintln!("Bot error: {e}"),
-        _ => eprintln!("Unexpected response"),
+        Response::Error(e) => anyhow::bail!("Bot error: {e}"),
+        _ => anyhow::bail!("Unexpected response"),
     }
     Ok(())
 }

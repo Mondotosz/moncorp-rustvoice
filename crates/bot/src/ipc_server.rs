@@ -39,9 +39,22 @@ async fn handle(
     bot_ctx: &Arc<OnceLock<BotContext>>,
 ) -> Response {
     match request {
-        Request::Status => Response::Status {
-            uptime_secs: start_time.elapsed().as_secs(),
-        },
+        Request::Status => {
+            let discord_ok = match bot_ctx.get() {
+                None => false,
+                Some(ctx) => {
+                    let runners = ctx.shard_manager.runners.lock().await;
+                    !runners.is_empty()
+                        && runners
+                            .values()
+                            .all(|r| r.stage == serenity::gateway::ConnectionStage::Connected)
+                }
+            };
+            Response::Status {
+                uptime_secs: start_time.elapsed().as_secs(),
+                discord_ok,
+            }
+        }
         Request::Stats => match stats(db).await {
             Ok((guilds, active_channels)) => Response::Stats {
                 guilds,
