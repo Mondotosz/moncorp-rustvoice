@@ -364,3 +364,26 @@ a `v*` tag. Tags applied: `latest` (on `main`) and semver tags from the git tag 
 `v0.2.0` → `0.2.0` and `0.2`). Uses `docker/metadata-action@v5` for tag extraction
 and `type=gha` BuildKit layer cache. `GITHUB_TOKEN` with `packages: write` is the
 only credential required — no manual secrets needed for a personal repo.
+
+## Versioning
+
+Version bumps happen **in the PR that makes the change**, not deferred to a
+separate pre-release "bump version" PR. `crates/rustvoice/Cargo.toml`'s version is
+the release-facing one — it bumps in every PR that changes code in any crate,
+since `rustvoice` is what actually gets tagged and shipped as the Docker image.
+`bot`, `db`, and `ipc` only bump their own version when their own source changed
+in that PR, classified independently per crate (patch for a fix, minor for a
+backward-compatible addition, major for a breaking change) — so the four
+versions are expected to drift apart between releases; that's fine, they are
+path dependencies, not crates.io packages, so nothing enforces them matching.
+A crate whose code didn't change in a PR is left alone even if one of its
+dependencies (also in this workspace) bumped — don't bump transitively.
+
+**Exception:** if `rustvoice`'s bump is a **major** version, every other crate's
+version is forced to match it, resetting any drift. Major bumps are the
+realignment point; minor/patch bumps are not.
+
+After any version edit, run `cargo build --workspace` to regenerate `Cargo.lock`
+and commit it alongside the `Cargo.toml` change. Tagging the release (`git tag
+vX.Y.Z`) is a separate, manual, user-triggered step — not something to do as
+part of a PR.
