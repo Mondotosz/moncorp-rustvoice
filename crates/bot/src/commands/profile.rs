@@ -53,6 +53,22 @@ pub async fn profile(
         format!("🔥 {streak}")
     };
 
+    let unlocked = db::repositories::user_achievement::list_by_user(uid, gid, &ctx.data().db)
+        .await?
+        .into_iter()
+        .map(|a| a.achievement_id)
+        .collect::<std::collections::HashSet<_>>();
+    let badges_field = if unlocked.is_empty() {
+        "—".to_string()
+    } else {
+        crate::achievements::ALL
+            .iter()
+            .filter(|a| unlocked.contains(a.id))
+            .map(|a| format!("{} {}", a.emoji, a.name))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
     let embed = CreateEmbed::new()
         .author(CreateEmbedAuthor::new(&display_name).icon_url(&avatar_url))
         .colour(0x5865F2u32)
@@ -60,7 +76,8 @@ pub async fn profile(
         .field("XP", xp_field, true)
         .field("Voice Time", voice_field, true)
         .field("Streak", streak_field, true)
-        .field("Progress", bar, false);
+        .field("Progress", bar, false)
+        .field("Badges", badges_field, false);
 
     ctx.send(poise::CreateReply::default().embed(embed)).await?;
     Ok(())

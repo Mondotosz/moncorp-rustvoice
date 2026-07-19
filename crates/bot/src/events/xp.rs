@@ -37,6 +37,8 @@ pub async fn handle_voice_transition(
                         .await
                         {
                             tracing::warn!("XP: add_xp failed for user {uid} in guild {gid}: {e}");
+                        } else {
+                            check_achievements(uid, gid, now, data).await;
                         }
                     }
                 }
@@ -115,7 +117,21 @@ async fn award_daily_bonus_if_eligible(uid: i64, gid: i64, now: i64, data: &Data
         return;
     }
 
+    check_achievements(uid, gid, now, data).await;
+
     tracing::debug!("XP: daily bonus awarded to user {uid} in guild {gid} (streak {new_streak})");
+}
+
+/// Re-fetches the profile and checks it against every achievement threshold. Called
+/// after any event that can move `xp`, `total_voice_seconds`, or `streak`.
+async fn check_achievements(uid: i64, gid: i64, now: i64, data: &Data) {
+    match db::repositories::user_profile::get(uid, gid, &data.db).await {
+        Ok(Some(profile)) => {
+            crate::achievements::check_and_unlock(uid, gid, &profile, now, &data.db).await;
+        }
+        Ok(None) => {}
+        Err(e) => tracing::warn!("XP: achievement check failed for user {uid} in guild {gid}: {e}"),
+    }
 }
 
 #[cfg(test)]
