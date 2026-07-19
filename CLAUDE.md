@@ -359,11 +359,14 @@ the Discord API, which is out of scope for now. The Clippy, Test, and Coverage j
 install `libsqlite3-dev` because SeaORM links against the system SQLite. Use
 `Swatinem/rust-cache@v2` to share Cargo caches across runs.
 
-`.github/workflows/docker.yml` builds and pushes to GHCR on every push to `main` or
-a `v*` tag. Tags applied: `latest` (on `main`) and semver tags from the git tag (e.g.
-`v0.2.0` → `0.2.0` and `0.2`). Uses `docker/metadata-action@v5` for tag extraction
-and `type=gha` BuildKit layer cache. `GITHUB_TOKEN` with `packages: write` is the
-only credential required — no manual secrets needed for a personal repo.
+`.github/workflows/docker.yml` builds and pushes to GHCR only on a `v*` tag push —
+merging to `main` does not trigger it, since `git tag vX.Y.Z` (see "Versioning"
+below) is the deliberate, manual release step. Tags applied per build: semver tags
+from the git tag (e.g. `v0.2.0` → `0.2.0` and `0.2`) plus `latest`, added
+automatically by `docker/metadata-action@v5`'s default `flavor: latest=auto` for the
+highest semver tag. Uses `type=gha` BuildKit layer cache. `GITHUB_TOKEN` with
+`packages: write` is the only credential required — no manual secrets needed for a
+personal repo.
 
 ## Versioning
 
