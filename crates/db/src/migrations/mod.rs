@@ -8,3 +8,4 @@ pub mod m00007_add_streak_to_user_profiles;
 pub mod m00008_add_fk_to_voice_sessions;
 pub mod m00009_add_channel_name_template_to_guilds;
 pub mod m00010_create_user_achievements;
+pub mod m00011_add_longest_session_to_user_profiles;

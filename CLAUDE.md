@@ -170,17 +170,21 @@ from `ctx.data().db` in-process, same as every other slash command; it has no
 relation to the IPC `Stats` request, which is for the external CLI talking to a
 separate daemon process.
 **Achievements**: `bot/src/achievements.rs::ALL` is the single source of truth for
-badge definitions (level, streak-day, and voice-hour thresholds). `check_and_unlock`
-re-checks every threshold against a freshly-fetched `user_profiles` row and records
-any newly-crossed one in `user_achievements(user_id, guild_id, achievement_id,
-unlocked_at)` (idempotent — an `OnConflict::do_nothing` insert). It's called from two
-places in `events/xp.rs`: after a session-end XP award, and after a daily-bonus
-award. Both call sites matter — streak achievements specifically must be checked
-right when `award_daily_bonus_if_eligible` increments `streak`, since that column
-resets to 0/1 on a missed daily window and there's no "best streak ever" column;
-recording the unlock at that moment is what makes it permanent. `/profile` lists
-unlocked badges (emoji + name) in `achievements::ALL` display order via
-`user_achievement::list_by_user`.
+badge definitions: level thresholds, streak-day thresholds, and longest-single-session
+hour thresholds. The session category is deliberately based on
+`user_profiles.longest_session_seconds` (the longest one sitting, updated in
+`events/xp.rs` alongside `add_xp` whenever a session ends) rather than cumulative
+voice time — cumulative time is already reflected in level via the XP curve, so a
+"total hours" badge would be redundant with it. `check_and_unlock` re-checks every
+threshold against a freshly-fetched `user_profiles` row and records any newly-crossed
+one in `user_achievements(user_id, guild_id, achievement_id, unlocked_at)`
+(idempotent — an `OnConflict::do_nothing` insert). It's called from two places in
+`events/xp.rs`: after a session-end XP award, and after a daily-bonus award. Both call
+sites matter — streak achievements specifically must be checked right when
+`award_daily_bonus_if_eligible` increments `streak`, since that column resets to 0/1
+on a missed daily window and there's no "best streak ever" column; recording the
+unlock at that moment is what makes it permanent. `/profile` lists unlocked badges
+(emoji + name) in `achievements::ALL` display order via `user_achievement::list_by_user`.
 `user_profiles(user_id, guild_id)` holds XP, voice seconds, last-daily timestamp,
 and streak counter; `voice_sessions(user_id, guild_id)` tracks active session join
 times. On bot reconnect, open sessions for users who left while offline receive XP

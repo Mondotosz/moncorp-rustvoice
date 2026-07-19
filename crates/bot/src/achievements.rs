@@ -4,7 +4,9 @@ use db::DatabaseConnection;
 enum Kind {
     Level(u32),
     StreakDays(i64),
-    VoiceHours(i64),
+    /// Longest *single* voice session, in hours — distinct from level, which already
+    /// reflects cumulative voice time (plus daily-bonus XP) through the level curve.
+    LongestSessionHours(i64),
 }
 
 #[derive(Copy, Clone)]
@@ -17,11 +19,11 @@ pub struct Achievement {
 
 impl Achievement {
     /// Pure decision: has this achievement's threshold been met by the given stats?
-    fn is_earned(&self, level: u32, total_voice_seconds: i64, streak: i64) -> bool {
+    fn is_earned(&self, level: u32, longest_session_seconds: i64, streak: i64) -> bool {
         match self.kind {
             Kind::Level(threshold) => level >= threshold,
             Kind::StreakDays(threshold) => streak >= threshold,
-            Kind::VoiceHours(hours) => total_voice_seconds >= hours * 3600,
+            Kind::LongestSessionHours(hours) => longest_session_seconds >= hours * 3600,
         }
     }
 }
@@ -70,37 +72,45 @@ const STREAK_100: Achievement = Achievement {
     kind: Kind::StreakDays(100),
 };
 
-const VOICE_10H: Achievement = Achievement {
-    id: "voice-10h",
-    name: "10 Hours in Voice",
+const SESSION_2H: Achievement = Achievement {
+    id: "session-2h",
+    name: "2-Hour Session",
     emoji: "🎧",
-    kind: Kind::VoiceHours(10),
+    kind: Kind::LongestSessionHours(2),
 };
-const VOICE_100H: Achievement = Achievement {
-    id: "voice-100h",
-    name: "100 Hours in Voice",
+const SESSION_6H: Achievement = Achievement {
+    id: "session-6h",
+    name: "6-Hour Session",
     emoji: "🎧",
-    kind: Kind::VoiceHours(100),
+    kind: Kind::LongestSessionHours(6),
 };
-const VOICE_500H: Achievement = Achievement {
-    id: "voice-500h",
-    name: "500 Hours in Voice",
+const SESSION_12H: Achievement = Achievement {
+    id: "session-12h",
+    name: "12-Hour Session",
     emoji: "🎧",
-    kind: Kind::VoiceHours(500),
+    kind: Kind::LongestSessionHours(12),
 };
 
 /// All defined achievements, in display order.
 pub const ALL: &[Achievement] = &[
-    LEVEL_10, LEVEL_25, LEVEL_50, LEVEL_100, STREAK_7, STREAK_30, STREAK_100, VOICE_10H,
-    VOICE_100H, VOICE_500H,
+    LEVEL_10,
+    LEVEL_25,
+    LEVEL_50,
+    LEVEL_100,
+    STREAK_7,
+    STREAK_30,
+    STREAK_100,
+    SESSION_2H,
+    SESSION_6H,
+    SESSION_12H,
 ];
 
 /// Checks `profile`'s current stats against every achievement and permanently records
 /// any newly crossed ones, returning those newly unlocked. Idempotent — already-unlocked
 /// achievements are left untouched.
 ///
-/// Must be called right after any event that can move `xp`, `total_voice_seconds`, or
-/// `streak` (session-end XP award, daily bonus). This matters most for streak
+/// Must be called right after any event that can move `xp`, `longest_session_seconds`,
+/// or `streak` (session-end XP award, daily bonus). This matters most for streak
 /// achievements: `user_profiles.streak` resets to 0/1 on a missed daily window and
 /// there's no "best streak ever" column, so an achievement only survives a later reset
 /// because it was recorded here at the moment the threshold was actually crossed.
@@ -115,7 +125,7 @@ pub async fn check_and_unlock(
     let mut newly_unlocked = Vec::new();
 
     for achievement in ALL {
-        if !achievement.is_earned(level, profile.total_voice_seconds, profile.streak) {
+        if !achievement.is_earned(level, profile.longest_session_seconds, profile.streak) {
             continue;
         }
         match db::repositories::user_achievement::unlock(user_id, guild_id, achievement.id, now, db)
@@ -150,9 +160,16 @@ mod tests {
     }
 
     #[test]
-    fn voice_hour_achievements_convert_hours_to_seconds() {
-        assert!(VOICE_10H.is_earned(1, 10 * 3600, 0));
-        assert!(!VOICE_10H.is_earned(1, 10 * 3600 - 1, 0));
+    fn session_achievements_convert_hours_to_seconds() {
+        assert!(SESSION_2H.is_earned(1, 2 * 3600, 0));
+        assert!(!SESSION_2H.is_earned(1, 2 * 3600 - 1, 0));
+    }
+
+    #[test]
+    fn session_achievements_ignore_level_and_streak() {
+        // A long total voice time (reflected in level) should not itself satisfy a
+        // longest-single-session threshold — only longest_session_seconds counts.
+        assert!(!SESSION_2H.is_earned(100, 0, 999));
     }
 
     #[tokio::test]
@@ -167,6 +184,7 @@ mod tests {
             total_voice_seconds: 0,
             last_daily_at: None,
             streak: 0,
+            longest_session_seconds: 0,
         };
 
         let first = check_and_unlock(42, 1, &profile, 1_000, &db).await;
@@ -189,14 +207,15 @@ mod tests {
             user_id: 42,
             guild_id: 1,
             xp: crate::leveling::xp_for_level(10),
-            total_voice_seconds: 10 * 3600,
+            total_voice_seconds: 0,
             last_daily_at: None,
             streak: 7,
+            longest_session_seconds: 2 * 3600,
         };
 
         let unlocked = check_and_unlock(42, 1, &profile, 1_000, &db).await;
         let mut ids: Vec<&str> = unlocked.iter().map(|a| a.id).collect();
         ids.sort_unstable();
-        assert_eq!(ids, vec!["level-10", "streak-7", "voice-10h"]);
+        assert_eq!(ids, vec!["level-10", "session-2h", "streak-7"]);
     }
 }
