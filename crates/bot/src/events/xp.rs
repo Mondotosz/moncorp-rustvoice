@@ -130,6 +130,8 @@ mod tests {
             start_time: std::time::Instant::now(),
             owner_id: None,
             channel_locks: Default::default(),
+            default_channel_name_template: crate::activity::DEFAULT_CHANNEL_NAME_TEMPLATE
+                .to_owned(),
         }
     }
 

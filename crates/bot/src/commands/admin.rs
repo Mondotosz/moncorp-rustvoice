@@ -162,6 +162,50 @@ pub async fn remove_trigger(
     Ok(())
 }
 
+/// Configure per-server settings.
+#[poise::command(
+    slash_command,
+    guild_only,
+    subcommands("channel_name"),
+    check = "has_manage_channels"
+)]
+pub async fn config(_ctx: Context<'_>) -> Result<(), Error> {
+    Ok(())
+}
+
+/// Set the temp-channel naming template for this server. Must contain `{game}`.
+#[poise::command(
+    slash_command,
+    guild_only,
+    rename = "channel-name",
+    check = "has_manage_channels"
+)]
+pub async fn channel_name(
+    ctx: Context<'_>,
+    #[description = "Template containing {game}, e.g. \"[{game}]\" or \"🎮 {game}\""]
+    template: String,
+) -> Result<(), Error> {
+    if !template.contains("{game}") {
+        ctx.say_ephemeral("Template must contain `{game}`, e.g. `[{game}]`.")
+            .await?;
+        return Ok(());
+    }
+
+    let guild_id = ctx.guild_id().unwrap().get() as i64;
+    db::repositories::guild::set_channel_name_template(
+        guild_id,
+        Some(template.clone()),
+        &ctx.data().db,
+    )
+    .await?;
+
+    ctx.say(format!(
+        "Channel name template set to `{template}`. New and renamed temp channels will use it."
+    ))
+    .await?;
+    Ok(())
+}
+
 /// Sends an ephemeral "please select a voice channel" reply and returns `false` if
 /// `channel` is not a voice channel, `true` otherwise.
 async fn require_voice_channel(

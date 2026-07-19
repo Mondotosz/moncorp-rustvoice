@@ -73,7 +73,14 @@ async fn on_join(
         .and_then(|c| c.guild())
         .and_then(|gc| gc.parent_id);
 
-    let mut create = serenity::builder::CreateChannel::new("[General]").kind(ChannelType::Voice);
+    let template = crate::activity::resolve_template(
+        guild_id.get() as i64,
+        &data.db,
+        &data.default_channel_name_template,
+    )
+    .await;
+    let initial_name = crate::activity::render_channel_name(&template, "General");
+    let mut create = serenity::builder::CreateChannel::new(initial_name).kind(ChannelType::Voice);
     if let Some(parent) = parent_id {
         create = create.category(parent);
     }
@@ -336,7 +343,13 @@ async fn recalculate_name(
         None => return Ok(()),
     };
 
-    let new_name = crate::activity::suggested_name(&members, ctx).await;
+    let template = crate::activity::resolve_template(
+        guild_id.get() as i64,
+        &data.db,
+        &data.default_channel_name_template,
+    )
+    .await;
+    let new_name = crate::activity::suggested_name(&members, ctx, &template).await;
 
     if current_name != new_name {
         channel_id

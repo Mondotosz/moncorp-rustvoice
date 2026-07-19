@@ -20,6 +20,7 @@ A Discord bot that creates temporary voice channels on demand and names them aft
 | `/triggers` | Admin (Manage Channels) | List all registered trigger channels in this server |
 | `/remove-trigger <channel>` | Admin (Manage Channels) | Remove a trigger channel (does not delete the Discord channel) |
 | `/permissions` | Admin (Manage Channels) | Show bot permission status for this server (🟢 granted / 🟠 optional missing / 🔴 core missing) |
+| `/config channel-name <template>` | Admin (Manage Channels) | Set this server's temp-channel naming template, e.g. `[{game}]` — must contain `{game}` |
 | `/register` | Bot owner (`DISCORD_OWNER_ID`) | Re-register slash commands globally with Discord |
 | `/profile [user]` | Anyone | Show your (or another member's) voice XP profile |
 | `/ranking` | Anyone | Show the server's voice XP leaderboard |
@@ -131,6 +132,7 @@ Copy `.env.example` to `.env` and fill in the values:
 | `DISCORD_SERVER_ID` | No | Guild snowflake — enables instant slash command registration during development |
 | `DISCORD_OWNER_ID` | No | Discord user ID of the bot owner — enables the `/register` slash command |
 | `IPC_SOCKET_PATH` | No | Defaults to `$XDG_RUNTIME_DIR/rustvoice.sock`, then `~/.local/run/`, then `/tmp/` |
+| `DEFAULT_CHANNEL_NAME_TEMPLATE` | No | App-level fallback for temp-channel names, e.g. `[{game}]` (the built-in default). Overridable per server via `/config channel-name` |
 
 #### Database
 

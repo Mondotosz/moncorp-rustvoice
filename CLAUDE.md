@@ -111,8 +111,8 @@ function in `bot/src/lib.rs` calls `http.get_current_user()` then
 `http.set_application_id()` before registering, because `Http::new(token)` leaves
 the application ID unset.
 
-**Permission guard**: The `/init`, `/permissions`, `/triggers`, and
-`/remove-trigger` admin commands use a `check` function (`has_manage_channels`)
+**Permission guard**: The `/init`, `/permissions`, `/triggers`, `/remove-trigger`,
+and `/config` admin commands use a `check` function (`has_manage_channels`)
 instead of `required_permissions` so the error message can be customised. The
 `/register` command uses a separate `is_owner` check that compares the invoker's ID
 against `ctx.data().owner_id`. Check failures are handled by the existing
@@ -173,6 +173,15 @@ user + insert DB row. Leave a temp channel → if empty, delete Discord channel 
 delete DB row (also deletes the associated `[join ↑]` channel if one exists).
 `activity::suggested_name` is called on every membership change and renames the
 channel if ≥ 50 % of members share a game.
+
+**Channel name templates**: `activity::render_channel_name` substitutes `{game}` in a
+template string (with the majority game, or `"General"`); templates without the
+placeholder are returned unchanged, so admins can opt out of game-based naming
+entirely. `activity::resolve_template` picks the template to use for a guild: its
+`guilds.channel_name_template` DB override (set via `/config channel-name`) if any,
+else `Data.default_channel_name_template` (from `DEFAULT_CHANNEL_NAME_TEMPLATE` or the
+built-in `[{game}]` default). Both `on_join` (initial channel name) and
+`recalculate_name` resolve the template before naming/renaming a channel.
 
 **Join request flow**: `/private` first creates a member-level overwrite for the bot
 on the channel (allowing `VIEW_CHANNEL | CONNECT | MANAGE_CHANNELS | MANAGE_ROLES`)
@@ -255,6 +264,7 @@ Copy `.env.example` to `.env`:
 | `DATABASE_URL`      | `sqlite:./db.sqlite` or an absolute path                                |
 | `IPC_SOCKET_PATH`   | Unix socket path; defaults to `$XDG_RUNTIME_DIR/rustvoice.sock` (see `ipc::default_socket_path`) |
 | `RUST_LOG`          | Log filter; overrides `-v` when set. E.g. `info`, `bot=debug,warn`. Defaults to `info` in Compose. |
+| `DEFAULT_CHANNEL_NAME_TEMPLATE` | App-level fallback temp-channel name template (optional — defaults to `[{game}]`); per-guild override via `/config channel-name` |
 
 ## Docker
 
