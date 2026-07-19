@@ -15,10 +15,7 @@ pub async fn profile(
     let gid = guild_id.get() as i64;
 
     let profile = db::repositories::user_profile::get(uid, gid, &ctx.data().db).await?;
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
+    let now = crate::time::now_unix();
 
     let xp = profile.as_ref().map(|p| p.xp).unwrap_or(0);
     let total_seconds = profile.as_ref().map(|p| p.total_voice_seconds).unwrap_or(0);

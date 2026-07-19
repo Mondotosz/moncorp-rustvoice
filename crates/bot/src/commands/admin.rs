@@ -1,6 +1,7 @@
 use poise::serenity_prelude as serenity;
 
 use crate::{
+    context_ext::ContextExt,
     permissions::{self, Category},
     Context, Error,
 };
@@ -13,13 +14,7 @@ pub async fn init(
     #[channel_types("Voice")]
     channel: serenity::GuildChannel,
 ) -> Result<(), Error> {
-    if channel.kind != serenity::ChannelType::Voice {
-        ctx.send(
-            poise::CreateReply::default()
-                .content("Please select a voice channel.")
-                .ephemeral(true),
-        )
-        .await?;
+    if !require_voice_channel(ctx, &channel).await? {
         return Ok(());
     }
 
@@ -68,13 +63,7 @@ pub async fn permissions(ctx: Context<'_>) -> Result<(), Error> {
         ));
     }
 
-    ctx.send(
-        poise::CreateReply::default()
-            .content(lines.join("\n"))
-            .ephemeral(true),
-    )
-    .await?;
-    Ok(())
+    ctx.say_ephemeral(lines.join("\n")).await
 }
 
 /// Re-register slash commands globally with Discord.
@@ -106,13 +95,7 @@ pub async fn triggers(ctx: Context<'_>) -> Result<(), Error> {
         format!("**Auto-voice trigger channels:**\n{}", lines.join("\n"))
     };
 
-    ctx.send(
-        poise::CreateReply::default()
-            .content(content)
-            .ephemeral(true),
-    )
-    .await?;
-    Ok(())
+    ctx.say_ephemeral(content).await
 }
 
 /// Remove a trigger channel from the auto-voice system (does not delete the Discord channel).
@@ -128,27 +111,17 @@ pub async fn remove_trigger(
     #[channel_types("Voice")]
     channel: serenity::GuildChannel,
 ) -> Result<(), Error> {
-    if channel.kind != serenity::ChannelType::Voice {
-        ctx.send(
-            poise::CreateReply::default()
-                .content("Please select a voice channel.")
-                .ephemeral(true),
-        )
-        .await?;
+    if !require_voice_channel(ctx, &channel).await? {
         return Ok(());
     }
 
     let channel_id = channel.id.get() as i64;
 
     if !db::repositories::primary_channel::exists(channel_id, &ctx.data().db).await? {
-        ctx.send(
-            poise::CreateReply::default()
-                .content(format!(
-                    "<#{}> is not a registered trigger channel.",
-                    channel.id
-                ))
-                .ephemeral(true),
-        )
+        ctx.say_ephemeral(format!(
+            "<#{}> is not a registered trigger channel.",
+            channel.id
+        ))
         .await?;
         return Ok(());
     }
@@ -168,17 +141,13 @@ pub async fn remove_trigger(
         if active.len() > MAX_SHOWN {
             mention_list.push_str(&format!(" and {} more", active.len() - MAX_SHOWN));
         }
-        ctx.send(
-            poise::CreateReply::default()
-                .content(format!(
-                    "Cannot remove <#{}>: {} active temp channel(s) were created from it: {}\n\
-                     Wait for them to empty or run `rustvoice cleanup` first.",
-                    channel.id,
-                    active.len(),
-                    mention_list
-                ))
-                .ephemeral(true),
-        )
+        ctx.say_ephemeral(format!(
+            "Cannot remove <#{}>: {} active temp channel(s) were created from it: {}\n\
+             Wait for them to empty or run `rustvoice cleanup` first.",
+            channel.id,
+            active.len(),
+            mention_list
+        ))
         .await?;
         return Ok(());
     }
@@ -191,6 +160,19 @@ pub async fn remove_trigger(
     ))
     .await?;
     Ok(())
+}
+
+/// Sends an ephemeral "please select a voice channel" reply and returns `false` if
+/// `channel` is not a voice channel, `true` otherwise.
+async fn require_voice_channel(
+    ctx: Context<'_>,
+    channel: &serenity::GuildChannel,
+) -> Result<bool, Error> {
+    if channel.kind != serenity::ChannelType::Voice {
+        ctx.say_ephemeral("Please select a voice channel.").await?;
+        return Ok(false);
+    }
+    Ok(true)
 }
 
 async fn is_owner(ctx: Context<'_>) -> Result<bool, Error> {

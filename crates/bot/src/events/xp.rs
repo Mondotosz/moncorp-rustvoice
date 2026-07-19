@@ -8,13 +8,6 @@ const DAILY_BONUS_XP: i64 = 3600;
 const DAILY_EARLY_SECS: i64 = 22 * 3600;
 const DAILY_LATE_SECS: i64 = 26 * 3600;
 
-fn now_unix() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64
-}
-
 pub async fn handle_voice_transition(
     user_id: serenity::UserId,
     old_channel_id: Option<serenity::ChannelId>,
@@ -29,7 +22,7 @@ pub async fn handle_voice_transition(
 
     let uid = user_id.get() as i64;
     let gid = guild_id.get() as i64;
-    let now = now_unix();
+    let now = crate::time::now_unix();
 
     // Close session if leaving a bot-managed temp channel.
     if let Some(old_id) = old_channel_id {
