@@ -4,7 +4,7 @@ use crate::migrations::{
     m00001_create_guilds, m00002_create_primary_channels, m00003_create_temporary_channels,
     m00004_add_join_channel_to_temporary_channels, m00005_create_user_profiles,
     m00006_create_voice_sessions, m00007_add_streak_to_user_profiles,
-    m00008_add_fk_to_voice_sessions,
+    m00008_add_fk_to_voice_sessions, m00009_add_channel_name_template_to_guilds,
 };
 
 pub struct Migrator;
@@ -21,6 +21,7 @@ impl MigratorTrait for Migrator {
             Box::new(m00006_create_voice_sessions::Migration),
             Box::new(m00007_add_streak_to_user_profiles::Migration),
             Box::new(m00008_add_fk_to_voice_sessions::Migration),
+            Box::new(m00009_add_channel_name_template_to_guilds::Migration),
         ]
     }
 }

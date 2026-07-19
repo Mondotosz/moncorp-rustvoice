@@ -34,6 +34,9 @@ pub struct Data {
     pub start_time: std::time::Instant,
     pub owner_id: Option<serenity::UserId>,
     pub channel_locks: ChannelLocks,
+    /// App-level fallback channel-name template, from `DEFAULT_CHANNEL_NAME_TEMPLATE`
+    /// or [`activity::DEFAULT_CHANNEL_NAME_TEMPLATE`]. Guilds may override via `/config`.
+    pub default_channel_name_template: String,
 }
 
 pub use error::BotError;
@@ -75,6 +78,9 @@ pub async fn run(token: String, db: DatabaseConnection, socket_path: String) -> 
         },
     };
 
+    let default_channel_name_template = std::env::var("DEFAULT_CHANNEL_NAME_TEMPLATE")
+        .unwrap_or_else(|_| activity::DEFAULT_CHANNEL_NAME_TEMPLATE.to_owned());
+
     let bot_ctx: Arc<OnceLock<BotContext>> = Arc::new(OnceLock::new());
 
     let ipc_db = db.clone();
@@ -93,6 +99,7 @@ pub async fn run(token: String, db: DatabaseConnection, socket_path: String) -> 
             start_time,
             owner_id,
             channel_locks: ChannelLocks::default(),
+            default_channel_name_template,
         },
         bot_ctx,
     )
