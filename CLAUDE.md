@@ -21,6 +21,9 @@ cargo fmt --all
 # Run the bot in the foreground (requires .env)
 cargo run -p rustvoice -- run
 
+# Run with Prometheus metrics enabled (see "Metrics" below)
+cargo run -p rustvoice --features metrics -- run
+
 # Run a single test in a specific crate
 cargo test -p bot test_name
 
