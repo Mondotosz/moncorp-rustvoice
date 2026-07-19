@@ -368,20 +368,32 @@ only credential required — no manual secrets needed for a personal repo.
 ## Versioning
 
 Version bumps happen **in the PR that makes the change**, not deferred to a
-separate pre-release "bump version" PR. `crates/rustvoice/Cargo.toml`'s version is
-the release-facing one — it bumps in every PR that changes code in any crate,
-since `rustvoice` is what actually gets tagged and shipped as the Docker image.
-`bot`, `db`, and `ipc` only bump their own version when their own source changed
-in that PR, classified independently per crate (patch for a fix, minor for a
-backward-compatible addition, major for a breaking change) — so the four
-versions are expected to drift apart between releases; that's fine, they are
-path dependencies, not crates.io packages, so nothing enforces them matching.
-A crate whose code didn't change in a PR is left alone even if one of its
-dependencies (also in this workspace) bumped — don't bump transitively.
+separate pre-release "bump version" PR. The workspace dependency graph is
+`db`/`ipc` (leaves) → `bot` (depends on both) → `rustvoice` (depends on all
+three) — bumps propagate **up** this graph, never down.
 
-**Exception:** if `rustvoice`'s bump is a **major** version, every other crate's
-version is forced to match it, resetting any drift. Major bumps are the
-realignment point; minor/patch bumps are not.
+- Bump every crate whose own source changed in the PR, classified independently
+  per crate (patch for a fix, minor for a backward-compatible addition, major
+  for a breaking change).
+- Then propagate transitively upward: if a change to `db` or `ipc` actually
+  affects a crate that depends on it (behavior change, not just an unused new
+  column/field), bump that dependent crate too, even if none of its own source
+  was touched in the PR. E.g. a `db` migration that `bot` immediately starts
+  relying on bumps both `db` and `bot`; a pure internal `db` refactor with no
+  observable effect on `bot` bumps only `db`.
+- `crates/rustvoice/Cargo.toml` always bumps when *any* crate below it bumps —
+  it's the release-facing version (the one that gets git-tagged and Docker
+  image-tagged), and it sits at the top of the graph so every change reaches it.
+- The reverse never applies: a change confined to `rustvoice`'s own source
+  (CLI parsing, `main.rs`, subcommand wiring) never forces a bump in `bot`,
+  `db`, or `ipc` — nothing in the workspace depends on `rustvoice`.
+- Versions are expected to drift apart between releases (e.g. `ipc` sitting
+  several patches behind `rustvoice`) — that's fine, these are path
+  dependencies, not crates.io packages, so nothing enforces them matching.
+
+**Exception:** if `rustvoice`'s bump for a PR is a **major** version, every
+other crate's version is forced to match it, resetting any drift. Major bumps
+are the realignment point; minor/patch bumps are not.
 
 After any version edit, run `cargo build --workspace` to regenerate `Cargo.lock`
 and commit it alongside the `Cargo.toml` change. Tagging the release (`git tag
