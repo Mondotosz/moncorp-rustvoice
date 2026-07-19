@@ -6,7 +6,7 @@ const MIN_SESSION_SECS: i64 = 60;
 const DAILY_BONUS_XP: i64 = 3600;
 // Daily window: eligible from 22 h after last award; in-window up to 26 h.
 const DAILY_EARLY_SECS: i64 = 22 * 3600;
-const DAILY_LATE_SECS: i64 = 26 * 3600;
+pub(crate) const DAILY_LATE_SECS: i64 = 26 * 3600;
 
 pub async fn handle_voice_transition(
     user_id: serenity::UserId,

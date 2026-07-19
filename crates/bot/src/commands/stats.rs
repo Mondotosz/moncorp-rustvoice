@@ -8,12 +8,11 @@ pub async fn serverstats(ctx: Context<'_>) -> Result<(), Error> {
     let guild_id = ctx.guild_id().unwrap().get() as i64;
     let db = &ctx.data().db;
 
-    let active_channels = db::repositories::temporary_channel::count_by_guild(guild_id, db).await?;
-    let triggers = db::repositories::primary_channel::list_by_guild(guild_id, db)
-        .await?
-        .len();
-    let total_seconds =
-        db::repositories::user_profile::total_voice_seconds_by_guild(guild_id, db).await?;
+    let (active_channels, triggers, total_seconds) = tokio::try_join!(
+        db::repositories::temporary_channel::count_by_guild(guild_id, db),
+        db::repositories::primary_channel::count_by_guild(guild_id, db),
+        db::repositories::user_profile::total_voice_seconds_by_guild(guild_id, db),
+    )?;
     let voice_time = if total_seconds == 0 {
         "—".to_string()
     } else {

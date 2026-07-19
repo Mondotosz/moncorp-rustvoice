@@ -140,4 +140,37 @@ mod tests {
         assert_eq!(format_duration(3660), "1h 1m");
         assert_eq!(format_duration(7320), "2h 2m");
     }
+
+    #[test]
+    fn progress_bar_zero_total_is_fully_filled() {
+        assert_eq!(progress_bar(0, 0, 10), "[██████████] 100.0%");
+    }
+
+    #[test]
+    fn progress_bar_current_over_total_is_clamped() {
+        assert_eq!(progress_bar(15, 10, 10), "[██████████] 100.0%");
+    }
+
+    #[test]
+    fn progress_bar_partial_fill() {
+        assert_eq!(progress_bar(5, 10, 10), "[█████░░░░░] 50.0%");
+    }
+
+    #[test]
+    fn xp_in_level_is_zero_at_a_level_boundary() {
+        let xp = xp_for_level(10);
+        assert_eq!(xp_in_level(xp), 0);
+    }
+
+    #[test]
+    fn xp_in_level_reflects_progress_past_the_boundary() {
+        let xp = xp_for_level(10) + 100;
+        assert_eq!(xp_in_level(xp), 100);
+    }
+
+    #[test]
+    fn xp_to_next_level_matches_the_next_boundarys_cost() {
+        let xp = xp_for_level(10);
+        assert_eq!(xp_to_next_level(xp), xp_for_level(11) - xp_for_level(10));
+    }
 }

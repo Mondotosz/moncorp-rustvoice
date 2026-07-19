@@ -183,6 +183,7 @@ pub async fn config(_ctx: Context<'_>) -> Result<(), Error> {
 pub async fn channel_name(
     ctx: Context<'_>,
     #[description = "Template containing {game}, e.g. \"[{game}]\" or \"🎮 {game}\""]
+    #[max_length = 100]
     template: String,
 ) -> Result<(), Error> {
     if !template.contains("{game}") {

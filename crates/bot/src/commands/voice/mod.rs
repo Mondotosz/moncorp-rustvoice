@@ -44,9 +44,11 @@ struct ChannelLockGuard<'a> {
 
 impl Drop for ChannelLockGuard<'_> {
     fn drop(&mut self) {
-        if let Ok(mut set) = self.locks.lock() {
-            set.remove(&self.channel_id);
-        }
+        let mut set = self
+            .locks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        set.remove(&self.channel_id);
     }
 }
 
@@ -55,7 +57,9 @@ impl Drop for ChannelLockGuard<'_> {
 /// in flight — callers should reply and bail out rather than proceed, to avoid racing
 /// on companion-channel creation/deletion.
 fn try_lock_channel(locks: &ChannelLocks, channel_id: ChannelId) -> Option<ChannelLockGuard<'_>> {
-    let mut set = locks.lock().ok()?;
+    let mut set = locks
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     set.insert(channel_id)
         .then(|| ChannelLockGuard { locks, channel_id })
 }

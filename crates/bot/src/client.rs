@@ -140,6 +140,10 @@ async fn on_error(err: poise::FrameworkError<'_, Data, Error>) {
                         )
                     }
                 }
+            } else if matches!(error, BotError::Db(_)) {
+                "Something went wrong talking to the database. Try again, and contact an admin \
+                 if it persists."
+                    .to_string()
             } else {
                 format!("Error: {error}")
             };

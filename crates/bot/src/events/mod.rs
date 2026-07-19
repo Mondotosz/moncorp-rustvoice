@@ -5,7 +5,7 @@ use poise::serenity_prelude as serenity;
 use crate::{Data, Error};
 
 mod voice_state;
-mod xp;
+pub(crate) mod xp;
 
 pub async fn handle(
     ctx: &serenity::Context,
@@ -53,9 +53,7 @@ async fn startup_cleanup(
         match ctx.http.get_channel(channel_id).await {
             Err(_) => {
                 // Channel deleted while bot was offline — remove DB row only.
-                if let Some(join_id) = channel.join_channel_id {
-                    let _ = serenity::ChannelId::new(join_id as u64).delete(ctx).await;
-                }
+                crate::delete_join_channel_if_present(ctx, channel.join_channel_id).await;
                 db::repositories::temporary_channel::delete(channel.id, &data.db).await?;
                 crate::metrics::temp_channel_deleted();
                 removed += 1;
@@ -68,9 +66,7 @@ async fn startup_cleanup(
                     .any(|vs| vs.channel_id == Some(channel_id));
 
                 if !has_members {
-                    if let Some(join_id) = channel.join_channel_id {
-                        let _ = serenity::ChannelId::new(join_id as u64).delete(ctx).await;
-                    }
+                    crate::delete_join_channel_if_present(ctx, channel.join_channel_id).await;
                     let _ = channel_id.delete(ctx).await;
                     db::repositories::temporary_channel::delete(channel.id, &data.db).await?;
                     crate::metrics::temp_channel_deleted();
