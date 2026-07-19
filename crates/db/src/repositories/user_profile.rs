@@ -95,3 +95,61 @@ pub async fn set_daily_state(
     model.update(db).await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_util::test_db;
+
+    async fn seed_guild(db: &DatabaseConnection, guild_id: i64) {
+        crate::repositories::guild::upsert(guild_id, db)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_returns_none_before_any_activity() {
+        let db = test_db().await;
+        seed_guild(&db, 1).await;
+        assert!(get(42, 1, &db).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn add_xp_creates_and_accumulates() {
+        let db = test_db().await;
+        seed_guild(&db, 1).await;
+
+        add_xp(42, 1, 100, 100, &db).await.unwrap();
+        add_xp(42, 1, 50, 50, &db).await.unwrap();
+
+        let profile = get(42, 1, &db).await.unwrap().unwrap();
+        assert_eq!(profile.xp, 150);
+        assert_eq!(profile.total_voice_seconds, 150);
+    }
+
+    #[tokio::test]
+    async fn list_top_by_guild_orders_by_xp_desc() {
+        let db = test_db().await;
+        seed_guild(&db, 1).await;
+
+        add_xp(1, 1, 50, 0, &db).await.unwrap();
+        add_xp(2, 1, 200, 0, &db).await.unwrap();
+        add_xp(3, 1, 100, 0, &db).await.unwrap();
+
+        let ranked = list_top_by_guild(1, &db).await.unwrap();
+        let ids: Vec<i64> = ranked.iter().map(|p| p.user_id).collect();
+        assert_eq!(ids, vec![2, 3, 1]);
+    }
+
+    #[tokio::test]
+    async fn set_daily_state_persists_streak_and_timestamp() {
+        let db = test_db().await;
+        seed_guild(&db, 1).await;
+
+        set_daily_state(42, 1, 1_000, 3, &db).await.unwrap();
+
+        let profile = get(42, 1, &db).await.unwrap().unwrap();
+        assert_eq!(profile.last_daily_at, Some(1_000));
+        assert_eq!(profile.streak, 3);
+    }
+}

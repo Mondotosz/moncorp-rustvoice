@@ -24,6 +24,12 @@ cargo run -p rustvoice -- run
 # Run a single test in a specific crate
 cargo test -p bot test_name
 
+# Coverage report (terminal summary; requires cargo-llvm-cov + the llvm-tools rustup component)
+cargo llvm-cov --workspace --summary-only
+
+# Coverage report as a browsable HTML page
+cargo llvm-cov --workspace --html --open
+
 # SeaORM: generate a new migration
 sea-orm-cli migrate generate <name> -d crates/db
 
@@ -247,9 +253,14 @@ The healthcheck uses `rustvoice daemon status` which connects to the IPC socket 
 ## CI/CD
 
 `.github/workflows/ci.yml` runs on every pull request: `cargo fmt --all -- --check`,
-`cargo clippy --workspace -- -D warnings`, and `cargo test --workspace`. The Clippy
-and Test jobs install `libsqlite3-dev` because SeaORM links against the system SQLite.
-Use `Swatinem/rust-cache@v2` to share Cargo caches across runs.
+`cargo clippy --workspace -- -D warnings`, `cargo test --workspace`, and a `Coverage`
+job that runs `cargo llvm-cov --workspace --summary-only` (via `taiki-e/install-action@cargo-llvm-cov`
+and the `llvm-tools` rustup component) to print a per-crate coverage table into the job
+log. Coverage is informational only — it does not gate merges, since large parts of
+`bot` (Discord command/event handlers) can't reasonably be unit-tested without mocking
+the Discord API, which is out of scope for now. The Clippy, Test, and Coverage jobs
+install `libsqlite3-dev` because SeaORM links against the system SQLite. Use
+`Swatinem/rust-cache@v2` to share Cargo caches across runs.
 
 `.github/workflows/docker.yml` builds and pushes to GHCR on every push to `main` or
 a `v*` tag. Tags applied: `latest` (on `main`) and semver tags from the git tag (e.g.

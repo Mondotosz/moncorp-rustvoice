@@ -87,3 +87,60 @@ pub async fn delete_orphaned(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_util::test_db;
+
+    async fn seed_guild(db: &DatabaseConnection, guild_id: i64) {
+        crate::repositories::guild::upsert(guild_id, db)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn start_end_roundtrip_returns_joined_at() {
+        let db = test_db().await;
+        seed_guild(&db, 1).await;
+
+        start(42, 1, 1_000, &db).await.unwrap();
+        let joined_at = end(42, 1, &db).await.unwrap();
+        assert_eq!(joined_at, Some(1_000));
+
+        // Session was removed by `end`.
+        assert_eq!(end(42, 1, &db).await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn start_does_not_overwrite_an_existing_session() {
+        let db = test_db().await;
+        seed_guild(&db, 1).await;
+
+        start(42, 1, 1_000, &db).await.unwrap();
+        start(42, 1, 2_000, &db).await.unwrap(); // reconnect race — should be a no-op
+
+        assert_eq!(end(42, 1, &db).await.unwrap(), Some(1_000));
+    }
+
+    #[tokio::test]
+    async fn delete_orphaned_only_removes_inactive_sessions() {
+        let db = test_db().await;
+        seed_guild(&db, 1).await;
+
+        start(1, 1, 1_000, &db).await.unwrap();
+        start(2, 1, 1_000, &db).await.unwrap();
+        start(3, 1, 1_000, &db).await.unwrap();
+
+        delete_orphaned(1, &[1, 3], &db).await.unwrap();
+
+        let mut remaining: Vec<i64> = list_by_guild(1, &db)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|s| s.user_id)
+            .collect();
+        remaining.sort();
+        assert_eq!(remaining, vec![1, 3]);
+    }
+}

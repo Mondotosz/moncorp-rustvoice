@@ -117,3 +117,222 @@ async fn award_daily_bonus_if_eligible(uid: i64, gid: i64, now: i64, data: &Data
 
     tracing::debug!("XP: daily bonus awarded to user {uid} in guild {gid} (streak {new_streak})");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn test_data() -> Data {
+        Data {
+            db: db::connection::connect_in_memory_for_tests()
+                .await
+                .expect("connect in-memory test db"),
+            start_time: std::time::Instant::now(),
+            owner_id: None,
+            channel_locks: Default::default(),
+        }
+    }
+
+    /// Registers `channel_id` as a bot-managed temporary voice channel in `guild_id`.
+    async fn seed_temp_channel(data: &Data, channel_id: i64, guild_id: i64) {
+        db::repositories::guild::upsert(guild_id, &data.db)
+            .await
+            .unwrap();
+        db::repositories::primary_channel::insert(9_000, guild_id, &data.db)
+            .await
+            .unwrap();
+        db::repositories::temporary_channel::insert(channel_id, guild_id, 9_000, &data.db)
+            .await
+            .unwrap();
+    }
+
+    mod daily_bonus {
+        use super::*;
+
+        #[tokio::test]
+        async fn first_ever_join_awards_bonus_with_streak_one() {
+            let data = test_data().await;
+            db::repositories::guild::upsert(1, &data.db).await.unwrap();
+            award_daily_bonus_if_eligible(1, 1, 1_000_000, &data).await;
+
+            let profile = db::repositories::user_profile::get(1, 1, &data.db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(profile.xp, DAILY_BONUS_XP);
+            assert_eq!(profile.streak, 1);
+            assert_eq!(profile.last_daily_at, Some(1_000_000));
+        }
+
+        #[tokio::test]
+        async fn too_early_awards_nothing_and_leaves_state_untouched() {
+            let data = test_data().await;
+            db::repositories::guild::upsert(1, &data.db).await.unwrap();
+            let last_daily = 1_000_000;
+            db::repositories::user_profile::set_daily_state(1, 1, last_daily, 5, &data.db)
+                .await
+                .unwrap();
+
+            let too_early = last_daily + DAILY_EARLY_SECS - 1;
+            award_daily_bonus_if_eligible(1, 1, too_early, &data).await;
+
+            let profile = db::repositories::user_profile::get(1, 1, &data.db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(profile.xp, 0);
+            assert_eq!(profile.streak, 5);
+            assert_eq!(profile.last_daily_at, Some(last_daily));
+        }
+
+        #[tokio::test]
+        async fn in_window_advances_anchor_by_exactly_24h_and_increments_streak() {
+            let data = test_data().await;
+            db::repositories::guild::upsert(1, &data.db).await.unwrap();
+            let last_daily = 1_000_000;
+            db::repositories::user_profile::set_daily_state(1, 1, last_daily, 5, &data.db)
+                .await
+                .unwrap();
+
+            // Well within [22h, 26h] of the old anchor, but not equal to "now".
+            let now = last_daily + DAILY_EARLY_SECS + 3_600;
+            award_daily_bonus_if_eligible(1, 1, now, &data).await;
+
+            let profile = db::repositories::user_profile::get(1, 1, &data.db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(profile.xp, DAILY_BONUS_XP);
+            assert_eq!(profile.streak, 6);
+            // Anchored to the *old* timestamp + 24h, not to `now`.
+            assert_eq!(profile.last_daily_at, Some(last_daily + 86_400));
+        }
+
+        #[tokio::test]
+        async fn missed_window_resets_streak_and_anchors_to_now() {
+            let data = test_data().await;
+            db::repositories::guild::upsert(1, &data.db).await.unwrap();
+            let last_daily = 1_000_000;
+            db::repositories::user_profile::set_daily_state(1, 1, last_daily, 5, &data.db)
+                .await
+                .unwrap();
+
+            let now = last_daily + DAILY_LATE_SECS + 1;
+            award_daily_bonus_if_eligible(1, 1, now, &data).await;
+
+            let profile = db::repositories::user_profile::get(1, 1, &data.db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(profile.xp, DAILY_BONUS_XP);
+            assert_eq!(profile.streak, 1);
+            assert_eq!(profile.last_daily_at, Some(now));
+        }
+    }
+
+    mod voice_transition {
+        use super::*;
+        use poise::serenity_prelude::{ChannelId, GuildId, UserId};
+
+        #[tokio::test]
+        async fn joining_a_temp_channel_starts_a_session() {
+            let data = test_data().await;
+            seed_temp_channel(&data, 100, 1).await;
+
+            handle_voice_transition(
+                UserId::new(42),
+                None,
+                Some(ChannelId::new(100)),
+                GuildId::new(1),
+                &data,
+            )
+            .await;
+
+            let sessions = db::repositories::voice_session::list_by_guild(1, &data.db)
+                .await
+                .unwrap();
+            assert_eq!(sessions.len(), 1);
+            assert_eq!(sessions[0].user_id, 42);
+        }
+
+        #[tokio::test]
+        async fn joining_a_non_temp_channel_does_nothing() {
+            let data = test_data().await;
+            db::repositories::guild::upsert(1, &data.db).await.unwrap();
+
+            handle_voice_transition(
+                UserId::new(42),
+                None,
+                Some(ChannelId::new(999)), // never registered as a temp channel
+                GuildId::new(1),
+                &data,
+            )
+            .await;
+
+            let sessions = db::repositories::voice_session::list_by_guild(1, &data.db)
+                .await
+                .unwrap();
+            assert!(sessions.is_empty());
+        }
+
+        #[tokio::test]
+        async fn quickly_leaving_a_temp_channel_closes_the_session_without_xp() {
+            let data = test_data().await;
+            seed_temp_channel(&data, 100, 1).await;
+
+            handle_voice_transition(
+                UserId::new(42),
+                None,
+                Some(ChannelId::new(100)),
+                GuildId::new(1),
+                &data,
+            )
+            .await;
+            // A test executes far faster than MIN_SESSION_SECS, so this leave is always
+            // "too short" and should award no XP.
+            handle_voice_transition(
+                UserId::new(42),
+                Some(ChannelId::new(100)),
+                None,
+                GuildId::new(1),
+                &data,
+            )
+            .await;
+
+            let sessions = db::repositories::voice_session::list_by_guild(1, &data.db)
+                .await
+                .unwrap();
+            assert!(sessions.is_empty(), "session should be closed on leave");
+
+            // The join awards the (unrelated) daily bonus, so `xp` alone isn't a clean
+            // signal here — `total_voice_seconds` is only ever touched by session-duration
+            // XP, which a sub-minute session must not receive.
+            let profile = db::repositories::user_profile::get(42, 1, &data.db)
+                .await
+                .unwrap();
+            let voice_seconds = profile.map(|p| p.total_voice_seconds).unwrap_or(0);
+            assert_eq!(voice_seconds, 0, "a sub-minute session should not award XP");
+        }
+
+        #[tokio::test]
+        async fn same_channel_transition_is_a_no_op() {
+            let data = test_data().await;
+            seed_temp_channel(&data, 100, 1).await;
+
+            // e.g. mute/deafen toggles fire VoiceStateUpdate without changing channel.
+            handle_voice_transition(
+                UserId::new(42),
+                Some(ChannelId::new(100)),
+                Some(ChannelId::new(100)),
+                GuildId::new(1),
+                &data,
+            )
+            .await;
+
+            let sessions = db::repositories::voice_session::list_by_guild(1, &data.db)
+                .await
+                .unwrap();
+            assert!(sessions.is_empty());
+        }
+    }
+}
