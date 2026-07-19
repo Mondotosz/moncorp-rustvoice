@@ -15,6 +15,7 @@ pub async fn upsert(user_id: i64, guild_id: i64, db: &DatabaseConnection) -> Res
         total_voice_seconds: Set(0),
         last_daily_at: Set(None),
         streak: Set(0),
+        longest_session_seconds: Set(0),
     };
     match UserProfile::insert(model)
         .on_conflict(
@@ -63,6 +64,32 @@ pub async fn add_xp(
         .filter(user_profile::Column::GuildId.eq(guild_id))
         .exec(db)
         .await?;
+    Ok(())
+}
+
+/// Records `duration_seconds` as the new longest single voice session if it exceeds
+/// the current record. No-op otherwise.
+pub async fn update_longest_session(
+    user_id: i64,
+    guild_id: i64,
+    duration_seconds: i64,
+    db: &DatabaseConnection,
+) -> Result<(), DbError> {
+    upsert(user_id, guild_id, db).await?;
+    let current = get(user_id, guild_id, db)
+        .await?
+        .map(|p| p.longest_session_seconds)
+        .unwrap_or(0);
+    if duration_seconds <= current {
+        return Ok(());
+    }
+    let model = user_profile::ActiveModel {
+        user_id: Set(user_id),
+        guild_id: Set(guild_id),
+        longest_session_seconds: Set(duration_seconds),
+        ..Default::default()
+    };
+    model.update(db).await?;
     Ok(())
 }
 
@@ -140,6 +167,30 @@ mod tests {
         let profile = get(42, 1, &db).await.unwrap().unwrap();
         assert_eq!(profile.xp, 150);
         assert_eq!(profile.total_voice_seconds, 150);
+    }
+
+    #[tokio::test]
+    async fn update_longest_session_records_the_first_session() {
+        let db = test_db().await;
+        seed_guild(&db, 1).await;
+
+        update_longest_session(42, 1, 3_600, &db).await.unwrap();
+
+        let profile = get(42, 1, &db).await.unwrap().unwrap();
+        assert_eq!(profile.longest_session_seconds, 3_600);
+    }
+
+    #[tokio::test]
+    async fn update_longest_session_only_grows() {
+        let db = test_db().await;
+        seed_guild(&db, 1).await;
+
+        update_longest_session(42, 1, 3_600, &db).await.unwrap();
+        update_longest_session(42, 1, 1_800, &db).await.unwrap(); // shorter, ignored
+        update_longest_session(42, 1, 7_200, &db).await.unwrap(); // longer, recorded
+
+        let profile = get(42, 1, &db).await.unwrap().unwrap();
+        assert_eq!(profile.longest_session_seconds, 7_200);
     }
 
     #[tokio::test]

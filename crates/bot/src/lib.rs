@@ -5,6 +5,7 @@ use poise::serenity_prelude as serenity;
 
 use db::DatabaseConnection;
 
+pub mod achievements;
 pub mod activity;
 pub mod client;
 pub mod commands;

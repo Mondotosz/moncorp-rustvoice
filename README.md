@@ -10,7 +10,7 @@ A Discord bot that creates temporary voice channels on demand and names them aft
 4. The name updates live as members join and leave.
 5. When the last member leaves, the channel is automatically deleted.
 6. Anyone in the channel can run `/private` to lock it. A `[join ↑]` channel appears below — others join it to send a request. Anyone currently inside the private channel sees an Allow/Deny prompt in the channel's text area and can respond. `/public` reverses this and removes the request channel.
-7. Time spent in a temp channel earns XP and counts toward voice time. Joining a temp channel once roughly every 24 hours earns a bonus and builds a streak. Use `/profile` to check your level and streak, or `/ranking` for the server leaderboard.
+7. Time spent in a temp channel earns XP and counts toward voice time. Joining a temp channel once roughly every 24 hours earns a bonus and builds a streak. Use `/profile` to check your level, streak, and unlocked badges, or `/ranking` for the server leaderboard.
 
 ## Slash commands
 

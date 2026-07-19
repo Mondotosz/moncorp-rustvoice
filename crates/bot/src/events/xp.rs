@@ -37,6 +37,17 @@ pub async fn handle_voice_transition(
                         .await
                         {
                             tracing::warn!("XP: add_xp failed for user {uid} in guild {gid}: {e}");
+                        } else {
+                            if let Err(e) = db::repositories::user_profile::update_longest_session(
+                                uid, gid, duration, &data.db,
+                            )
+                            .await
+                            {
+                                tracing::warn!(
+                                    "XP: update_longest_session failed for user {uid} in guild {gid}: {e}"
+                                );
+                            }
+                            check_achievements(uid, gid, now, data).await;
                         }
                     }
                 }
@@ -115,7 +126,21 @@ async fn award_daily_bonus_if_eligible(uid: i64, gid: i64, now: i64, data: &Data
         return;
     }
 
+    check_achievements(uid, gid, now, data).await;
+
     tracing::debug!("XP: daily bonus awarded to user {uid} in guild {gid} (streak {new_streak})");
+}
+
+/// Re-fetches the profile and checks it against every achievement threshold. Called
+/// after any event that can move `xp`, `total_voice_seconds`, or `streak`.
+async fn check_achievements(uid: i64, gid: i64, now: i64, data: &Data) {
+    match db::repositories::user_profile::get(uid, gid, &data.db).await {
+        Ok(Some(profile)) => {
+            crate::achievements::check_and_unlock(uid, gid, &profile, now, &data.db).await;
+        }
+        Ok(None) => {}
+        Err(e) => tracing::warn!("XP: achievement check failed for user {uid} in guild {gid}: {e}"),
+    }
 }
 
 #[cfg(test)]
@@ -314,6 +339,34 @@ mod tests {
                 .unwrap();
             let voice_seconds = profile.map(|p| p.total_voice_seconds).unwrap_or(0);
             assert_eq!(voice_seconds, 0, "a sub-minute session should not award XP");
+        }
+
+        #[tokio::test]
+        async fn a_long_session_updates_the_longest_session_record() {
+            let data = test_data().await;
+            seed_temp_channel(&data, 100, 1).await;
+
+            // Seed a session that started well over 2h ago so the leave transition
+            // below computes a duration long enough to cross the session-2h achievement.
+            let joined_at = crate::time::now_unix() - 2 * 3600 - 60;
+            db::repositories::voice_session::start(42, 1, joined_at, &data.db)
+                .await
+                .unwrap();
+
+            handle_voice_transition(
+                UserId::new(42),
+                Some(ChannelId::new(100)),
+                None,
+                GuildId::new(1),
+                &data,
+            )
+            .await;
+
+            let profile = db::repositories::user_profile::get(42, 1, &data.db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(profile.longest_session_seconds >= 2 * 3600);
         }
 
         #[tokio::test]
