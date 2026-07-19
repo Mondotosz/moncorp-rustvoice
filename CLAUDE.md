@@ -342,8 +342,11 @@ The healthcheck uses `rustvoice daemon status` which connects to the IPC socket 
 `Dockerfile`, controlled by the `FEATURES` build arg (empty string vs. `metrics`).
 The default variant keeps unprefixed tags (`latest`, `X.Y.Z`, `X.Y`); the
 metrics-enabled variant gets `all-` prefixed tags (`all-latest`, `all-X.Y.Z`,
-`all-X.Y`) via `docker/metadata-action@v5`'s `flavor: prefix=...` input in
-`.github/workflows/docker.yml`'s build matrix. `EXPOSE 9091` in the runtime stage is
+`all-X.Y`) via `docker/metadata-action@v5`'s `flavor: prefix=...,onlatest=true` input
+in `.github/workflows/docker.yml`'s build matrix — `onlatest=true` is required
+because the auto-generated `latest` tag is otherwise exempt from `prefix`/`suffix`,
+which would make both matrix legs push the same bare `latest` tag and race each
+other. `EXPOSE 9091` in the runtime stage is
 documentation only (the default binary never binds that port since the feature is
 compiled out).
 
@@ -359,11 +362,14 @@ the Discord API, which is out of scope for now. The Clippy, Test, and Coverage j
 install `libsqlite3-dev` because SeaORM links against the system SQLite. Use
 `Swatinem/rust-cache@v2` to share Cargo caches across runs.
 
-`.github/workflows/docker.yml` builds and pushes to GHCR on every push to `main` or
-a `v*` tag. Tags applied: `latest` (on `main`) and semver tags from the git tag (e.g.
-`v0.2.0` → `0.2.0` and `0.2`). Uses `docker/metadata-action@v5` for tag extraction
-and `type=gha` BuildKit layer cache. `GITHUB_TOKEN` with `packages: write` is the
-only credential required — no manual secrets needed for a personal repo.
+`.github/workflows/docker.yml` builds and pushes to GHCR only on a `v*` tag push —
+merging to `main` does not trigger it, since `git tag vX.Y.Z` (see "Versioning"
+below) is the deliberate, manual release step. Tags applied per build: semver tags
+from the git tag (e.g. `v0.2.0` → `0.2.0` and `0.2`) plus `latest`, added
+automatically by `docker/metadata-action@v5`'s default `flavor: latest=auto` for the
+highest semver tag. Uses `type=gha` BuildKit layer cache. `GITHUB_TOKEN` with
+`packages: write` is the only credential required — no manual secrets needed for a
+personal repo.
 
 ## Versioning
 
