@@ -24,6 +24,7 @@ A Discord bot that creates temporary voice channels on demand and names them aft
 | `/register` | Bot owner (`DISCORD_OWNER_ID`) | Re-register slash commands globally with Discord |
 | `/profile [user]` | Anyone | Show your (or another member's) voice XP profile |
 | `/ranking` | Anyone | Show the server's voice XP leaderboard |
+| `/serverstats` | Anyone | Show server-wide voice activity stats (active temp channels, registered triggers, total voice time logged) |
 | `/rename <name>` | Anyone in a temp channel | Rename your current channel |
 | `/limit <n>` | Anyone in a temp channel | Set a user limit (0 = unlimited) |
 | `/unlimit` | Anyone in a temp channel | Remove the user limit |

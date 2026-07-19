@@ -1,7 +1,7 @@
 use sea_orm::sea_query::{Expr, OnConflict};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QueryOrder,
-    Set,
+    QuerySelect, Set,
 };
 
 use crate::entities::user_profile::{self, Entity as UserProfile};
@@ -77,6 +77,21 @@ pub async fn list_top_by_guild(
         .await?)
 }
 
+/// Sum of `total_voice_seconds` across every member with a profile in `guild_id`.
+pub async fn total_voice_seconds_by_guild(
+    guild_id: i64,
+    db: &DatabaseConnection,
+) -> Result<i64, DbError> {
+    let total: Option<Option<i64>> = UserProfile::find()
+        .filter(user_profile::Column::GuildId.eq(guild_id))
+        .select_only()
+        .column_as(user_profile::Column::TotalVoiceSeconds.sum(), "total")
+        .into_tuple()
+        .one(db)
+        .await?;
+    Ok(total.flatten().unwrap_or(0))
+}
+
 pub async fn set_daily_state(
     user_id: i64,
     guild_id: i64,
@@ -125,6 +140,27 @@ mod tests {
         let profile = get(42, 1, &db).await.unwrap().unwrap();
         assert_eq!(profile.xp, 150);
         assert_eq!(profile.total_voice_seconds, 150);
+    }
+
+    #[tokio::test]
+    async fn total_voice_seconds_by_guild_is_zero_with_no_profiles() {
+        let db = test_db().await;
+        seed_guild(&db, 1).await;
+        assert_eq!(total_voice_seconds_by_guild(1, &db).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn total_voice_seconds_by_guild_sums_only_that_guild() {
+        let db = test_db().await;
+        seed_guild(&db, 1).await;
+        seed_guild(&db, 2).await;
+
+        add_xp(1, 1, 0, 100, &db).await.unwrap();
+        add_xp(2, 1, 0, 250, &db).await.unwrap();
+        add_xp(3, 2, 0, 999, &db).await.unwrap();
+
+        assert_eq!(total_voice_seconds_by_guild(1, &db).await.unwrap(), 350);
+        assert_eq!(total_voice_seconds_by_guild(2, &db).await.unwrap(), 999);
     }
 
     #[tokio::test]
