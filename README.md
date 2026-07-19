@@ -10,6 +10,7 @@ A Discord bot that creates temporary voice channels on demand and names them aft
 4. The name updates live as members join and leave.
 5. When the last member leaves, the channel is automatically deleted.
 6. Anyone in the channel can run `/private` to lock it. A `[join ↑]` channel appears below — others join it to send a request. Anyone currently inside the private channel sees an Allow/Deny prompt in the channel's text area and can respond. `/public` reverses this and removes the request channel.
+7. Time spent in a temp channel earns XP and counts toward voice time. Joining a temp channel once roughly every 24 hours earns a bonus and builds a streak. Use `/profile` to check your level and streak, or `/ranking` for the server leaderboard.
 
 ## Slash commands
 
@@ -20,6 +21,8 @@ A Discord bot that creates temporary voice channels on demand and names them aft
 | `/remove-trigger <channel>` | Admin (Manage Channels) | Remove a trigger channel (does not delete the Discord channel) |
 | `/permissions` | Admin (Manage Channels) | Show bot permission status for this server (🟢 granted / 🟠 optional missing / 🔴 core missing) |
 | `/register` | Bot owner (`DISCORD_OWNER_ID`) | Re-register slash commands globally with Discord |
+| `/profile [user]` | Anyone | Show your (or another member's) voice XP profile |
+| `/ranking` | Anyone | Show the server's voice XP leaderboard |
 | `/rename <name>` | Anyone in a temp channel | Rename your current channel |
 | `/limit <n>` | Anyone in a temp channel | Set a user limit (0 = unlimited) |
 | `/unlimit` | Anyone in a temp channel | Remove the user limit |
