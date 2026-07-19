@@ -161,7 +161,14 @@ streak to 1. All daily bonus logic lives in `events/xp.rs::award_daily_bonus_if_
 total voice time, and a streak counter (`🔥 N` or `—`). The streak displayed is
 computed at request time: 0 if `last_daily_at` is more than 26 h ago. `/ranking`
 shows the server leaderboard sorted by XP with ◀/▶ button pagination (10 per page,
-60 s timeout, buttons auto-disabled on expiry).
+60 s timeout, buttons auto-disabled on expiry). `/serverstats` (open to anyone,
+read-only, no admin gate) shows guild-wide totals — active temp channel count
+(`temporary_channel::count_by_guild`), registered trigger count
+(`primary_channel::list_by_guild`), and total voice time logged
+(`user_profile::total_voice_seconds_by_guild`, a SQL `SUM`) — all queried directly
+from `ctx.data().db` in-process, same as every other slash command; it has no
+relation to the IPC `Stats` request, which is for the external CLI talking to a
+separate daemon process.
 `user_profiles(user_id, guild_id)` holds XP, voice seconds, last-daily timestamp,
 and streak counter; `voice_sessions(user_id, guild_id)` tracks active session join
 times. On bot reconnect, open sessions for users who left while offline receive XP
