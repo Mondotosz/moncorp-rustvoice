@@ -21,6 +21,9 @@ cargo fmt --all
 # Run the bot in the foreground (requires .env)
 cargo run -p rustvoice -- run
 
+# Run with Prometheus metrics enabled (see "Metrics" below)
+cargo run -p rustvoice --features metrics -- run
+
 # Run a single test in a specific crate
 cargo test -p bot test_name
 
@@ -361,3 +364,38 @@ a `v*` tag. Tags applied: `latest` (on `main`) and semver tags from the git tag 
 `v0.2.0` → `0.2.0` and `0.2`). Uses `docker/metadata-action@v5` for tag extraction
 and `type=gha` BuildKit layer cache. `GITHUB_TOKEN` with `packages: write` is the
 only credential required — no manual secrets needed for a personal repo.
+
+## Versioning
+
+Version bumps happen **in the PR that makes the change**, not deferred to a
+separate pre-release "bump version" PR. The workspace dependency graph is
+`db`/`ipc` (leaves) → `bot` (depends on both) → `rustvoice` (depends on all
+three) — bumps propagate **up** this graph, never down.
+
+- Bump every crate whose own source changed in the PR, classified independently
+  per crate (patch for a fix, minor for a backward-compatible addition, major
+  for a breaking change).
+- Then propagate transitively upward: if a change to `db` or `ipc` actually
+  affects a crate that depends on it (behavior change, not just an unused new
+  column/field), bump that dependent crate too, even if none of its own source
+  was touched in the PR. E.g. a `db` migration that `bot` immediately starts
+  relying on bumps both `db` and `bot`; a pure internal `db` refactor with no
+  observable effect on `bot` bumps only `db`.
+- `crates/rustvoice/Cargo.toml` always bumps when *any* crate below it bumps —
+  it's the release-facing version (the one that gets git-tagged and Docker
+  image-tagged), and it sits at the top of the graph so every change reaches it.
+- The reverse never applies: a change confined to `rustvoice`'s own source
+  (CLI parsing, `main.rs`, subcommand wiring) never forces a bump in `bot`,
+  `db`, or `ipc` — nothing in the workspace depends on `rustvoice`.
+- Versions are expected to drift apart between releases (e.g. `ipc` sitting
+  several patches behind `rustvoice`) — that's fine, these are path
+  dependencies, not crates.io packages, so nothing enforces them matching.
+
+**Exception:** if `rustvoice`'s bump for a PR is a **major** version, every
+other crate's version is forced to match it, resetting any drift. Major bumps
+are the realignment point; minor/patch bumps are not.
+
+After any version edit, run `cargo build --workspace` to regenerate `Cargo.lock`
+and commit it alongside the `Cargo.toml` change. Tagging the release (`git tag
+vX.Y.Z`) is a separate, manual, user-triggered step — not something to do as
+part of a PR.
