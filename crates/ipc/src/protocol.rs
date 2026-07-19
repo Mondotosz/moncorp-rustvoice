@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Requests that the CLI client can send to the running bot daemon over the Unix socket.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub enum Request {
     /// Query daemon liveness and uptime.
     Status,
@@ -12,7 +12,7 @@ pub enum Request {
 }
 
 /// Responses the bot daemon sends back for each [`Request`] variant.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub enum Response {
     /// Daemon is alive; contains uptime and whether Discord is reachable.
     Status { uptime_secs: u64, discord_ok: bool },

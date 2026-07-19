@@ -111,3 +111,43 @@ impl<T> PermissionResultExt<T> for Result<T, serenity::Error> {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ok_results_pass_through_unchanged() {
+        let result: Result<u32, serenity::Error> = Ok(42);
+        assert_eq!(
+            result.requires(&[Permissions::MANAGE_CHANNELS]).unwrap(),
+            42
+        );
+    }
+
+    #[test]
+    fn err_results_are_annotated_with_required_permission_names() {
+        let result: Result<(), serenity::Error> = Err(serenity::Error::Other("boom"));
+        let err = result
+            .requires(&[Permissions::MANAGE_CHANNELS, Permissions::MOVE_MEMBERS])
+            .unwrap_err();
+
+        assert_eq!(
+            err.required,
+            &[Permissions::MANAGE_CHANNELS, Permissions::MOVE_MEMBERS]
+        );
+        assert_eq!(err.required_names, "Manage Channels, Move Members");
+    }
+
+    #[test]
+    fn unknown_permissions_are_omitted_from_the_formatted_name_list() {
+        let result: Result<(), serenity::Error> = Err(serenity::Error::Other("boom"));
+        // KICK_MEMBERS has no PermissionEntry in ENTRIES, so it should be silently skipped
+        // rather than panicking or producing an empty segment.
+        let err = result
+            .requires(&[Permissions::MANAGE_CHANNELS, Permissions::KICK_MEMBERS])
+            .unwrap_err();
+
+        assert_eq!(err.required_names, "Manage Channels");
+    }
+}

@@ -52,3 +52,46 @@ pub async fn needs_migration(database_url: &str) -> Result<Option<usize>, DbErro
         Err(_) => Ok(Some(Migrator::migrations().len())),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Unique temp sqlite file path for this test process/thread, cleaned up on drop.
+    struct TempDbFile(std::path::PathBuf);
+
+    impl TempDbFile {
+        fn new(label: &str) -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "rustvoice_test_{label}_{}_{:?}.sqlite",
+                std::process::id(),
+                std::thread::current().id()
+            ));
+            let _ = std::fs::remove_file(&path);
+            Self(path)
+        }
+
+        fn url(&self) -> String {
+            format!("sqlite:{}", self.0.display())
+        }
+    }
+
+    impl Drop for TempDbFile {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    #[tokio::test]
+    async fn needs_migration_goes_from_pending_to_none_after_connect() {
+        let file = TempDbFile::new("needs_migration");
+        let url = file.url();
+
+        let total = Migrator::migrations().len();
+        assert_eq!(needs_migration(&url).await.unwrap(), Some(total));
+
+        crate::connection::connect(&url).await.unwrap();
+
+        assert_eq!(needs_migration(&url).await.unwrap(), None);
+    }
+}

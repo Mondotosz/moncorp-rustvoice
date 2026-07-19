@@ -24,27 +24,45 @@ pub async fn connect(database_url: &str) -> Result<DatabaseConnection, DbError> 
     Ok(db)
 }
 
-/// For `sqlite:path` URLs, create the parent directory and the database file if they don't exist.
-fn ensure_sqlite_dir(url: &str) -> Result<(), DbError> {
-    // Strip "sqlite:" and any leading slashes (e.g. "sqlite:./foo", "sqlite:///abs/foo").
-    let after_scheme = match url.strip_prefix("sqlite:") {
-        Some(p) => p,
-        None => return Ok(()),
-    };
+/// Connects to a fresh, fully-migrated in-memory SQLite database for use in tests.
+/// Pinned to a single connection: SQLite's `:memory:` database is private to the
+/// connection that created it, so a multi-connection pool would silently see an empty
+/// database on some queries.
+pub async fn connect_in_memory_for_tests() -> Result<DatabaseConnection, DbError> {
+    let mut opts = ConnectOptions::new("sqlite::memory:");
+    opts.max_connections(1).sqlx_logging(false);
+    let db = Database::connect(opts).await?;
+    Migrator::up(&db, None).await?;
+    Ok(db)
+}
 
-    // Reconstruct the absolute/relative file path. One leading slash = absolute; two or more
-    // slashes (e.g. "sqlite:///path") also indicate absolute, but strip down to one. Zero
-    // leading slashes = relative (e.g. "sqlite:./foo" or "sqlite:foo").
+/// Resolves a `sqlite:...` connection URL to the filesystem path it points at, or
+/// `None` if the URL isn't a `sqlite:` URL or targets a special in-memory database.
+///
+/// One leading slash after the scheme means absolute (`sqlite:/absolute/path`); two or
+/// more (`sqlite:///abs/path`) also mean absolute but get collapsed down to one; zero
+/// leading slashes mean relative (`sqlite:./foo`, `sqlite:foo`).
+fn resolve_sqlite_path(url: &str) -> Option<String> {
+    let after_scheme = url.strip_prefix("sqlite:")?;
+
     let path_str = match after_scheme.chars().take_while(|&c| c == '/').count() {
         0 => after_scheme.to_owned(),          // relative: "./db.sqlite"
         1 => after_scheme.to_owned(),          // "/absolute/path"
         n => after_scheme[n - 1..].to_owned(), // "///abs" → "/abs"
     };
 
-    // Skip special targets (:memory: or empty)
     if path_str.is_empty() || path_str == ":memory:" {
-        return Ok(());
+        return None;
     }
+
+    Some(path_str)
+}
+
+/// For `sqlite:path` URLs, create the parent directory and the database file if they don't exist.
+fn ensure_sqlite_dir(url: &str) -> Result<(), DbError> {
+    let Some(path_str) = resolve_sqlite_path(url) else {
+        return Ok(());
+    };
 
     let path = std::path::Path::new(&path_str);
 
@@ -70,4 +88,48 @@ fn ensure_sqlite_dir(url: &str) -> Result<(), DbError> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relative_paths_pass_through_unchanged() {
+        assert_eq!(
+            resolve_sqlite_path("sqlite:./db.sqlite"),
+            Some("./db.sqlite".to_owned())
+        );
+        assert_eq!(
+            resolve_sqlite_path("sqlite:db.sqlite"),
+            Some("db.sqlite".to_owned())
+        );
+    }
+
+    #[test]
+    fn single_leading_slash_is_absolute() {
+        assert_eq!(
+            resolve_sqlite_path("sqlite:/absolute/db.sqlite"),
+            Some("/absolute/db.sqlite".to_owned())
+        );
+    }
+
+    #[test]
+    fn triple_slash_is_collapsed_to_one() {
+        assert_eq!(
+            resolve_sqlite_path("sqlite:///absolute/db.sqlite"),
+            Some("/absolute/db.sqlite".to_owned())
+        );
+    }
+
+    #[test]
+    fn memory_and_empty_targets_resolve_to_none() {
+        assert_eq!(resolve_sqlite_path("sqlite::memory:"), None);
+        assert_eq!(resolve_sqlite_path("sqlite:"), None);
+    }
+
+    #[test]
+    fn non_sqlite_urls_resolve_to_none() {
+        assert_eq!(resolve_sqlite_path("postgres://localhost/db"), None);
+    }
 }
