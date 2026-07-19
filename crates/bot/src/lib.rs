@@ -7,11 +7,13 @@ use db::DatabaseConnection;
 pub mod activity;
 pub mod client;
 pub mod commands;
+mod context_ext;
 pub mod error;
 pub mod events;
 pub mod ipc_server;
 pub mod leveling;
 pub mod permissions;
+pub mod time;
 
 /// HTTP + cache handles shared between the IPC server and event handlers.
 /// Populated once the bot fires its Ready event.

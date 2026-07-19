@@ -73,19 +73,14 @@ async fn on_join(
         .and_then(|c| c.guild())
         .and_then(|gc| gc.parent_id);
 
-    let mut builder = guild_id.create_channel(
-        ctx,
-        serenity::builder::CreateChannel::new("[General]").kind(ChannelType::Voice),
-    );
+    let mut create = serenity::builder::CreateChannel::new("[General]").kind(ChannelType::Voice);
     if let Some(parent) = parent_id {
-        builder = guild_id.create_channel(
-            ctx,
-            serenity::builder::CreateChannel::new("[General]")
-                .kind(ChannelType::Voice)
-                .category(parent),
-        );
+        create = create.category(parent);
     }
-    let temp_channel = builder.await.requires(&[Permissions::MANAGE_CHANNELS])?;
+    let temp_channel = guild_id
+        .create_channel(ctx, create)
+        .await
+        .requires(&[Permissions::MANAGE_CHANNELS])?;
 
     db::repositories::temporary_channel::insert(
         temp_channel.id.get() as i64,
@@ -280,16 +275,14 @@ async fn on_leave(
         return Ok(());
     }
 
-    let guild = match ctx.cache.guild(guild_id) {
-        Some(g) => g.clone(),
+    let member_count = match ctx.cache.guild(guild_id) {
+        Some(g) => g
+            .voice_states
+            .values()
+            .filter(|vs| vs.channel_id == Some(channel_id))
+            .count(),
         None => return Ok(()),
     };
-
-    let member_count = guild
-        .voice_states
-        .values()
-        .filter(|vs| vs.channel_id == Some(channel_id))
-        .count();
 
     if member_count == 0 {
         // Also delete the join channel if one was created.
@@ -325,25 +318,25 @@ async fn recalculate_name(
         return Ok(());
     }
 
-    let guild = match ctx.cache.guild(guild_id) {
-        Some(g) => g.clone(),
+    let (members, current_name) = match ctx.cache.guild(guild_id) {
+        Some(g) => {
+            let members: Vec<_> = g
+                .voice_states
+                .values()
+                .filter(|vs| vs.channel_id == Some(channel_id))
+                .filter_map(|vs| g.members.get(&vs.user_id).cloned())
+                .collect();
+            let name = g
+                .channels
+                .get(&channel_id)
+                .map(|c| c.name.clone())
+                .unwrap_or_default();
+            (members, name)
+        }
         None => return Ok(()),
     };
 
-    let members: Vec<_> = guild
-        .voice_states
-        .values()
-        .filter(|vs| vs.channel_id == Some(channel_id))
-        .filter_map(|vs| guild.members.get(&vs.user_id).cloned())
-        .collect();
-
     let new_name = crate::activity::suggested_name(&members, ctx).await;
-
-    let current_name = guild
-        .channels
-        .get(&channel_id)
-        .map(|c| c.name.clone())
-        .unwrap_or_default();
 
     if current_name != new_name {
         channel_id

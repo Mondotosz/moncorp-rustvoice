@@ -3,7 +3,7 @@ use std::time::Duration;
 use poise::serenity_prelude::{self as serenity, CreateEmbed, CreateEmbedFooter};
 use serenity::futures::StreamExt as _;
 
-use crate::{leveling, Context, Error};
+use crate::{context_ext::ContextExt, leveling, Context, Error};
 
 const PAGE_SIZE: usize = 10;
 
@@ -16,12 +16,8 @@ pub async fn ranking(ctx: Context<'_>) -> Result<(), Error> {
     let profiles = db::repositories::user_profile::list_top_by_guild(gid, &ctx.data().db).await?;
 
     if profiles.is_empty() {
-        ctx.send(
-            poise::CreateReply::default()
-                .content("No one has earned XP yet. Join a voice channel to get started!")
-                .ephemeral(true),
-        )
-        .await?;
+        ctx.say_ephemeral("No one has earned XP yet. Join a voice channel to get started!")
+            .await?;
         return Ok(());
     }
 

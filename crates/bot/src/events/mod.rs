@@ -39,10 +39,7 @@ async fn startup_cleanup(
     let guild_id = guild.id;
     let gid = guild_id.get() as i64;
 
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
+    let now = crate::time::now_unix();
 
     let channels = db::repositories::temporary_channel::list_by_guild(gid, &data.db).await?;
 
