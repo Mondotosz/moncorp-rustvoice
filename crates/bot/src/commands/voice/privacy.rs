@@ -11,6 +11,12 @@ pub async fn private(ctx: Context<'_>) -> Result<(), Error> {
         return Ok(());
     };
 
+    let Some(_guard) = super::try_lock_channel(&ctx.data().channel_locks, channel_id) else {
+        ctx.say("This channel's privacy is already being updated — try again in a moment.")
+            .await?;
+        return Ok(());
+    };
+
     let everyone_id = ctx.guild_id().unwrap().everyone_role();
     let bot_id = ctx.serenity_context().cache.current_user().id;
 
@@ -88,6 +94,12 @@ pub async fn private(ctx: Context<'_>) -> Result<(), Error> {
 #[poise::command(slash_command, guild_only)]
 pub async fn public(ctx: Context<'_>) -> Result<(), Error> {
     let Some(channel_id) = super::require_temp_channel(ctx).await? else {
+        return Ok(());
+    };
+
+    let Some(_guard) = super::try_lock_channel(&ctx.data().channel_locks, channel_id) else {
+        ctx.say("This channel's privacy is already being updated — try again in a moment.")
+            .await?;
         return Ok(());
     };
 

@@ -1,4 +1,5 @@
-use std::sync::{Arc, OnceLock};
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use poise::serenity_prelude as serenity;
 
@@ -23,11 +24,16 @@ pub struct BotContext {
     pub shard_manager: Arc<serenity::ShardManager>,
 }
 
+/// Channels currently undergoing an exclusive operation (e.g. `/private`, `/public`),
+/// used to prevent concurrent invocations from racing on channel creation/deletion.
+pub type ChannelLocks = Mutex<HashSet<serenity::ChannelId>>;
+
 /// Shared state available to every poise command through the bot's [`Context`].
 pub struct Data {
     pub db: DatabaseConnection,
     pub start_time: std::time::Instant,
     pub owner_id: Option<serenity::UserId>,
+    pub channel_locks: ChannelLocks,
 }
 
 pub use error::BotError;
@@ -86,6 +92,7 @@ pub async fn run(token: String, db: DatabaseConnection, socket_path: String) -> 
             db,
             start_time,
             owner_id,
+            channel_locks: ChannelLocks::default(),
         },
         bot_ctx,
     )
