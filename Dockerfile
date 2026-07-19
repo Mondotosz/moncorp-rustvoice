@@ -7,13 +7,15 @@ COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
+ARG FEATURES=""
 COPY --from=planner /build/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json ${FEATURES:+--features "$FEATURES"}
 COPY . .
-RUN cargo build --release --locked -p rustvoice
+RUN cargo build --release --locked -p rustvoice ${FEATURES:+--features "$FEATURES"}
 
 FROM alpine:3.21 AS runtime
 RUN apk add --no-cache sqlite-libs ca-certificates
 COPY --from=builder /build/target/release/rustvoice /usr/local/bin/rustvoice
+EXPOSE 9091
 ENTRYPOINT ["rustvoice"]
 CMD ["run"]

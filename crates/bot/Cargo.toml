@@ -13,3 +13,8 @@ thiserror = { workspace = true }
 poise = "0.6"
 db = { path = "../db" }
 ipc = { path = "../ipc" }
+metrics = { version = "0.24", optional = true }
+metrics-exporter-prometheus = { version = "0.16", optional = true }
+
+[features]
+metrics = ["dep:metrics", "dep:metrics-exporter-prometheus"]

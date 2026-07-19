@@ -19,6 +19,15 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        include:
+          - variant: default
+            features: ""
+            tag_prefix: ""
+          - variant: all
+            features: "metrics"
+            tag_prefix: "all-"
 
     steps:
       - name: Checkout
@@ -36,6 +45,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            prefix=${{ matrix.tag_prefix }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -49,7 +60,9 @@ jobs:
         with:
           context: .
           push: true
+          build-args: |
+            FEATURES=${{ matrix.features }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}

@@ -38,6 +38,7 @@ pub async fn handle_voice_transition(
                         {
                             tracing::warn!("XP: add_xp failed for user {uid} in guild {gid}: {e}");
                         } else {
+                            crate::metrics::xp_awarded(duration);
                             if let Err(e) = db::repositories::user_profile::update_longest_session(
                                 uid, gid, duration, &data.db,
                             )
@@ -112,6 +113,8 @@ async fn award_daily_bonus_if_eligible(uid: i64, gid: i64, now: i64, data: &Data
         tracing::warn!("XP: daily bonus add_xp failed for user {uid}: {e}");
         return;
     }
+    crate::metrics::xp_awarded(DAILY_BONUS_XP);
+    crate::metrics::daily_bonus_awarded();
 
     if let Err(e) = db::repositories::user_profile::set_daily_state(
         uid,

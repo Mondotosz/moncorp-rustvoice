@@ -288,12 +288,41 @@ Copy `.env.example` to `.env`:
 | `IPC_SOCKET_PATH`   | Unix socket path; defaults to `$XDG_RUNTIME_DIR/rustvoice.sock` (see `ipc::default_socket_path`) |
 | `RUST_LOG`          | Log filter; overrides `-v` when set. E.g. `info`, `bot=debug,warn`. Defaults to `info` in Compose. |
 | `DEFAULT_CHANNEL_NAME_TEMPLATE` | App-level fallback temp-channel name template (optional — defaults to `[{game}]`); per-guild override via `/config channel-name` |
+| `METRICS_ADDR` | Bind address for the Prometheus `/metrics` HTTP endpoint (optional — defaults to `127.0.0.1:9091`); only served when built with the `metrics` Cargo feature |
+
+## Metrics
+
+Prometheus support lives entirely behind the `metrics` Cargo feature
+(`metrics` + `metrics-exporter-prometheus` crates) so the default build has zero
+metrics-related dependencies or overhead. `bot/src/metrics.rs` is the single place
+that contains `#[cfg(feature = "metrics")]` — every function in it (`init`,
+`init_active_channels_gauge`, `temp_channel_created`, `temp_channel_deleted`,
+`xp_awarded`, `daily_bonus_awarded`, `spawn_discord_status_poll`) is always callable
+and a no-op when the feature is disabled, so call sites in `events/`, `ipc_server.rs`,
+and `events/mod.rs::startup_cleanup` never need their own `#[cfg]`. `bot::run()` calls
+`metrics::init` (starts the `/metrics` HTTP listener via
+`PrometheusBuilder::with_http_listener`), `metrics::init_active_channels_gauge`
+(seeds the active-channel gauge from the DB so a restart doesn't read as zero), and
+`metrics::spawn_discord_status_poll` (a 15 s-interval background task mirroring the
+same shard-`Connected` signal `ipc_server`'s `Request::Status` computes on demand,
+pushed instead of pulled since Prometheus scrapes are periodic). Every
+`temporary_channels` deletion path (`voice_state.rs::on_leave`,
+`ipc_server.rs::cleanup`, `events/mod.rs::startup_cleanup`) calls
+`metrics::temp_channel_deleted()` so the active-channel gauge stays accurate; only
+`voice_state.rs::on_join` calls `metrics::temp_channel_created()`, since that's the
+only place a temp channel is created. Build with `cargo build -p rustvoice --features
+metrics` or `cargo run -p rustvoice --features metrics -- run`; there is no runtime
+env-var toggle — the feature is a compile-time decision, matched at the Docker layer
+by the `all-` prefixed image variant (see below).
 
 ## Docker
 
 ```bash
-# Build locally
+# Build locally (default variant, no metrics)
 docker build -t rustvoice .
+
+# Build the metrics-enabled variant
+docker build -t rustvoice:all --build-arg FEATURES=metrics .
 
 # Run with compose (reads .env from the same directory)
 docker compose up -d
@@ -305,6 +334,15 @@ docker compose ps
 **`compose.yaml`** mounts a named volume at `/data` and sets `DATABASE_URL=sqlite:/data/db.sqlite`.
 Migrations run automatically on every startup — no separate init step needed.
 The healthcheck uses `rustvoice daemon status` which connects to the IPC socket the bot exposes even in foreground mode (`rustvoice run`).
+
+**Image variants:** every release publishes two image variants from the same
+`Dockerfile`, controlled by the `FEATURES` build arg (empty string vs. `metrics`).
+The default variant keeps unprefixed tags (`latest`, `X.Y.Z`, `X.Y`); the
+metrics-enabled variant gets `all-` prefixed tags (`all-latest`, `all-X.Y.Z`,
+`all-X.Y`) via `docker/metadata-action@v5`'s `flavor: prefix=...` input in
+`.github/workflows/docker.yml`'s build matrix. `EXPOSE 9091` in the runtime stage is
+documentation only (the default binary never binds that port since the feature is
+compiled out).
 
 ## CI/CD
 

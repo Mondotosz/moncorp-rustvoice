@@ -22,3 +22,6 @@ crossterm = "0.28"
 bot = { path = "../bot" }
 db = { path = "../db" }
 ipc = { path = "../ipc" }
+
+[features]
+metrics = ["bot/metrics"]
