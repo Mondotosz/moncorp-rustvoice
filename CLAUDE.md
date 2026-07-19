@@ -342,8 +342,11 @@ The healthcheck uses `rustvoice daemon status` which connects to the IPC socket 
 `Dockerfile`, controlled by the `FEATURES` build arg (empty string vs. `metrics`).
 The default variant keeps unprefixed tags (`latest`, `X.Y.Z`, `X.Y`); the
 metrics-enabled variant gets `all-` prefixed tags (`all-latest`, `all-X.Y.Z`,
-`all-X.Y`) via `docker/metadata-action@v5`'s `flavor: prefix=...` input in
-`.github/workflows/docker.yml`'s build matrix. `EXPOSE 9091` in the runtime stage is
+`all-X.Y`) via `docker/metadata-action@v5`'s `flavor: prefix=...,onlatest=true` input
+in `.github/workflows/docker.yml`'s build matrix — `onlatest=true` is required
+because the auto-generated `latest` tag is otherwise exempt from `prefix`/`suffix`,
+which would make both matrix legs push the same bare `latest` tag and race each
+other. `EXPOSE 9091` in the runtime stage is
 documentation only (the default binary never binds that port since the feature is
 compiled out).
 
