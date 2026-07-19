@@ -65,6 +65,11 @@ Cargo workspace with four crates under `crates/`:
   `PermissionResultExt` trait. `leveling.rs` implements the XP formula and helper
   functions (`xp_for_level`, `level_from_xp`, `format_duration`, `progress_bar`).
   `events/xp.rs` handles XP accrual and daily bonus on voice state transitions.
+  `commands/voice/mod.rs::require_temp_channel` is the single source of truth for
+  "is the caller in a bot-managed temp channel" — reused by `/rename`, `/limit`,
+  `/unlimit`, `/private`, and `/public` instead of being re-implemented per command.
+  `context_ext.rs` provides `ContextExt::say_ephemeral` for the common ephemeral-reply
+  pattern; `time.rs` provides `now_unix()`.
 - **`db`** (library) — SeaORM entities (`guilds`, `primary_channels`,
   `temporary_channels`, `user_profiles`, `voice_sessions`) in `entities/`, thin
   async wrappers in `repositories/`. `error.rs` defines `DbError` (thiserror enum
@@ -91,10 +96,10 @@ process environment (which still holds the pre-TUI value).
 
 **Discord library**: Poise 0.6.2 on top of Serenity 0.12.5. Slash commands use
 `#[poise::command(slash_command, guild_only)]`. The shared state
-`Data { db, start_time, owner_id: Option<UserId> }` is in `bot/src/lib.rs`.
-`owner_id` is read from `DISCORD_OWNER_ID` at startup and used to restrict
-`/register` to the configured bot owner. `Error` and `Context<'a>` type aliases are
-also defined there and imported throughout the crate.
+`Data { db, start_time, owner_id: Option<UserId>, channel_locks }` is in
+`bot/src/lib.rs`. `owner_id` is read from `DISCORD_OWNER_ID` at startup and used to
+restrict `/register` to the configured bot owner. `Error` and `Context<'a>` type
+aliases are also defined there and imported throughout the crate.
 
 **Slash command registration**: On startup, when `DISCORD_SERVER_ID` is set the
 bot registers commands in that guild only (instant propagation) and clears all
@@ -182,7 +187,12 @@ A `tokio::spawn`-ed task drives a `ComponentInteractionCollector` (120 s timeout
 only members currently in the private channel can respond. Allow moves the
 requester in; Deny disconnects them. `/public` deletes the `[join ↑]` channel,
 clears the DB field, and removes the `@everyone` deny — the bot's member overwrite
-is intentionally kept so it never loses its channel-level permissions.
+is intentionally kept so it never loses its channel-level permissions. Both
+`/private` and `/public` first claim an in-process lock on the channel via
+`Data.channel_locks` (`commands/voice::try_lock_channel`, an RAII guard released on
+drop) — without it, two concurrent invocations on the same channel could each
+create their own `[join ↑]` companion channel and race on which one gets recorded
+in the DB, orphaning the other.
 
 **Daemon**: `rustvoice daemon start` forks before Tokio starts (in `main()`,
 not inside `Cli::run()`). This is intentional — forking a multi-threaded Tokio
@@ -212,7 +222,20 @@ cache for member counts.
 **IPC**: Newline-delimited JSON over a Unix socket (one request line → one
 response line). The daemon side (`bot/src/ipc_server.rs`) listens; CLI
 subcommands (`daemon status`, `stats`, `cleanup`) connect as clients via
-`ipc::client::IpcClient`.
+`ipc::client::IpcClient`. `Request::Status` reports `discord_ok`, computed from the
+live `ShardManager.runners` map (`BotContext.shard_manager`) rather than just
+process liveness — the IPC server runs as its own `tokio::spawn` task independent
+of the Discord gateway, so a stuck/disconnected gateway would otherwise go
+undetected. `daemon status` (and the Docker healthcheck) exit non-zero when
+`discord_ok` is false.
+
+**Testing**: Repository and other DB-backed tests use
+`db::connection::connect_in_memory_for_tests()` — a fresh, migrated
+`sqlite::memory:` database pinned to a single pooled connection. This is required,
+not stylistic: SQLite's `:memory:` database is private to the connection that
+created it, so a multi-connection pool (like `connect`'s default of 5) would
+silently see an empty database on some queries. See **CI/CD** below for why
+Discord-facing code isn't unit-tested and coverage isn't gated on a threshold.
 
 **Logging**: `tracing` + `tracing-subscriber`. `RUST_LOG` is the primary control
 when set (takes full ownership of the filter, supports target-specific directives
