@@ -6,7 +6,9 @@ use crate::{permissions::PermissionResultExt, Context, Error};
 #[poise::command(slash_command, guild_only)]
 pub async fn rename(
     ctx: Context<'_>,
-    #[description = "New channel name"] name: String,
+    #[description = "New channel name"]
+    #[max_length = 100]
+    name: String,
 ) -> Result<(), Error> {
     let Some(channel_id) = super::require_temp_channel(ctx).await? else {
         return Ok(());

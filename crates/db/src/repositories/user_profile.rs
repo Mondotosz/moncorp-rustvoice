@@ -68,7 +68,9 @@ pub async fn add_xp(
 }
 
 /// Records `duration_seconds` as the new longest single voice session if it exceeds
-/// the current record. No-op otherwise.
+/// the current record. No-op otherwise. Uses a single atomic `UPDATE ... SET x =
+/// MAX(x, ?)` rather than a separate read-then-write, so two concurrent calls for the
+/// same user/guild (e.g. overlapping voice events) can't race and lose an update.
 pub async fn update_longest_session(
     user_id: i64,
     guild_id: i64,
@@ -76,20 +78,15 @@ pub async fn update_longest_session(
     db: &DatabaseConnection,
 ) -> Result<(), DbError> {
     upsert(user_id, guild_id, db).await?;
-    let current = get(user_id, guild_id, db)
-        .await?
-        .map(|p| p.longest_session_seconds)
-        .unwrap_or(0);
-    if duration_seconds <= current {
-        return Ok(());
-    }
-    let model = user_profile::ActiveModel {
-        user_id: Set(user_id),
-        guild_id: Set(guild_id),
-        longest_session_seconds: Set(duration_seconds),
-        ..Default::default()
-    };
-    model.update(db).await?;
+    UserProfile::update_many()
+        .col_expr(
+            user_profile::Column::LongestSessionSeconds,
+            Expr::cust_with_values("MAX(longest_session_seconds, ?)", [duration_seconds]),
+        )
+        .filter(user_profile::Column::UserId.eq(user_id))
+        .filter(user_profile::Column::GuildId.eq(guild_id))
+        .exec(db)
+        .await?;
     Ok(())
 }
 

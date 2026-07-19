@@ -297,9 +297,7 @@ async fn on_leave(
         if let Some(record) =
             db::repositories::temporary_channel::find(channel_id.get() as i64, &data.db).await?
         {
-            if let Some(join_id) = record.join_channel_id {
-                let _ = serenity::ChannelId::new(join_id as u64).delete(ctx).await;
-            }
+            crate::delete_join_channel_if_present(ctx, record.join_channel_id).await;
         }
         channel_id
             .delete(ctx)

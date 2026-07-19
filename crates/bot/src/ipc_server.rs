@@ -42,13 +42,7 @@ async fn handle(
         Request::Status => {
             let discord_ok = match bot_ctx.get() {
                 None => false,
-                Some(ctx) => {
-                    let runners = ctx.shard_manager.runners.lock().await;
-                    !runners.is_empty()
-                        && runners
-                            .values()
-                            .all(|r| r.stage == serenity::gateway::ConnectionStage::Connected)
-                }
+                Some(ctx) => ctx.is_connected().await,
             };
             Response::Status {
                 uptime_secs: start_time.elapsed().as_secs(),
@@ -95,10 +89,7 @@ async fn cleanup(
         match ctx.http.get_channel(channel_id).await {
             Err(_) => {
                 // Channel is gone from Discord — remove DB row.
-                if let Some(join_id) = channel.join_channel_id {
-                    let join_channel_id = serenity::ChannelId::new(join_id as u64);
-                    let _ = ctx.http.delete_channel(join_channel_id, None).await;
-                }
+                crate::delete_join_channel_if_present(&ctx.http, channel.join_channel_id).await;
                 db::repositories::temporary_channel::delete(channel.id, db).await?;
                 crate::metrics::temp_channel_deleted();
                 removed += 1;
@@ -117,10 +108,7 @@ async fn cleanup(
                     .unwrap_or(false);
 
                 if is_empty {
-                    if let Some(join_id) = channel.join_channel_id {
-                        let join_channel_id = serenity::ChannelId::new(join_id as u64);
-                        let _ = ctx.http.delete_channel(join_channel_id, None).await;
-                    }
+                    crate::delete_join_channel_if_present(&ctx.http, channel.join_channel_id).await;
                     let _ = ctx.http.delete_channel(channel_id, None).await;
                     db::repositories::temporary_channel::delete(channel.id, db).await?;
                     crate::metrics::temp_channel_deleted();

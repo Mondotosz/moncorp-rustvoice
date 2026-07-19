@@ -124,7 +124,21 @@ pub async fn check_and_unlock(
     let level = crate::leveling::level_from_xp(profile.xp);
     let mut newly_unlocked = Vec::new();
 
+    // Skip achievements already recorded, so a maxed-out active user doesn't attempt
+    // a redundant INSERT for every long-since-unlocked achievement on every event.
+    let already_unlocked: std::collections::HashSet<String> =
+        match db::repositories::user_achievement::list_by_user(user_id, guild_id, db).await {
+            Ok(rows) => rows.into_iter().map(|r| r.achievement_id).collect(),
+            Err(e) => {
+                tracing::warn!("achievements: failed to list unlocked for user {user_id}: {e}");
+                Default::default()
+            }
+        };
+
     for achievement in ALL {
+        if already_unlocked.contains(achievement.id) {
+            continue;
+        }
         if !achievement.is_earned(level, profile.longest_session_seconds, profile.streak) {
             continue;
         }

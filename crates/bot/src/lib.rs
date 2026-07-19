@@ -26,6 +26,32 @@ pub struct BotContext {
     pub shard_manager: Arc<serenity::ShardManager>,
 }
 
+impl BotContext {
+    /// True if every shard is currently connected to Discord. The single source of
+    /// truth for "is Discord connected," used by both the IPC `Request::Status`
+    /// handler and the metrics Discord-connected gauge poll.
+    pub async fn is_connected(&self) -> bool {
+        let runners = self.shard_manager.runners.lock().await;
+        !runners.is_empty()
+            && runners
+                .values()
+                .all(|r| r.stage == serenity::gateway::ConnectionStage::Connected)
+    }
+}
+
+/// Best-effort deletes the `[join ↑]` companion channel for a temp channel, if one
+/// exists. Shared by every path that removes a `temporary_channels` row (IPC cleanup,
+/// startup cleanup, and normal on-leave deletion) so the cleanup logic can't drift
+/// between call sites.
+pub async fn delete_join_channel_if_present(
+    http: impl AsRef<serenity::Http>,
+    join_channel_id: Option<i64>,
+) {
+    if let Some(join_id) = join_channel_id {
+        let _ = serenity::ChannelId::new(join_id as u64).delete(http).await;
+    }
+}
+
 /// Channels currently undergoing an exclusive operation (e.g. `/private`, `/public`),
 /// used to prevent concurrent invocations from racing on channel creation/deletion.
 pub type ChannelLocks = Mutex<HashSet<serenity::ChannelId>>;

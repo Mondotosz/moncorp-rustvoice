@@ -63,16 +63,9 @@ pub fn daily_bonus_awarded() {
 pub fn spawn_discord_status_poll(_bot_ctx: Arc<OnceLock<BotContext>>) {
     #[cfg(feature = "metrics")]
     tokio::spawn(async move {
-        use poise::serenity_prelude as serenity;
-
         loop {
             if let Some(ctx) = _bot_ctx.get() {
-                let runners = ctx.shard_manager.runners.lock().await;
-                let connected = !runners.is_empty()
-                    && runners
-                        .values()
-                        .all(|r| r.stage == serenity::gateway::ConnectionStage::Connected);
-                drop(runners);
+                let connected = ctx.is_connected().await;
                 metrics::gauge!("rustvoice_discord_connected").set(if connected {
                     1.0
                 } else {
