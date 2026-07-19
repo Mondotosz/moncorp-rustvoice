@@ -95,6 +95,10 @@ async fn cleanup(
         match ctx.http.get_channel(channel_id).await {
             Err(_) => {
                 // Channel is gone from Discord — remove DB row.
+                if let Some(join_id) = channel.join_channel_id {
+                    let join_channel_id = serenity::ChannelId::new(join_id as u64);
+                    let _ = ctx.http.delete_channel(join_channel_id, None).await;
+                }
                 db::repositories::temporary_channel::delete(channel.id, db).await?;
                 removed += 1;
                 tracing::debug!("Cleanup: removed stale DB entry for channel {channel_id}");
@@ -112,6 +116,10 @@ async fn cleanup(
                     .unwrap_or(false);
 
                 if is_empty {
+                    if let Some(join_id) = channel.join_channel_id {
+                        let join_channel_id = serenity::ChannelId::new(join_id as u64);
+                        let _ = ctx.http.delete_channel(join_channel_id, None).await;
+                    }
                     let _ = ctx.http.delete_channel(channel_id, None).await;
                     db::repositories::temporary_channel::delete(channel.id, db).await?;
                     removed += 1;
