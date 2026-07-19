@@ -14,6 +14,7 @@ pub mod error;
 pub mod events;
 pub mod ipc_server;
 pub mod leveling;
+pub mod metrics;
 pub mod permissions;
 pub mod time;
 
@@ -82,7 +83,18 @@ pub async fn run(token: String, db: DatabaseConnection, socket_path: String) -> 
     let default_channel_name_template = std::env::var("DEFAULT_CHANNEL_NAME_TEMPLATE")
         .unwrap_or_else(|_| activity::DEFAULT_CHANNEL_NAME_TEMPLATE.to_owned());
 
+    let metrics_addr = std::env::var("METRICS_ADDR")
+        .unwrap_or_else(|_| "127.0.0.1:9091".to_owned())
+        .parse()
+        .unwrap_or_else(|e| {
+            tracing::warn!("METRICS_ADDR invalid ({e}) — falling back to 127.0.0.1:9091");
+            "127.0.0.1:9091".parse().unwrap()
+        });
+    metrics::init(metrics_addr);
+    metrics::init_active_channels_gauge(&db).await;
+
     let bot_ctx: Arc<OnceLock<BotContext>> = Arc::new(OnceLock::new());
+    metrics::spawn_discord_status_poll(bot_ctx.clone());
 
     let ipc_db = db.clone();
     let ipc_bot_ctx = bot_ctx.clone();

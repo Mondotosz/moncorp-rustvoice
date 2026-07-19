@@ -100,6 +100,19 @@ docker compose ps   # should show "healthy" after ~30 s
 
 The database is created and migrated automatically on first start. Updating to a new version is just `docker compose pull && docker compose up -d`.
 
+**Prometheus metrics:** the default image doesn't include the metrics exporter. Use the `all-` prefixed tag (e.g. `all-latest`) and set `METRICS_ADDR` to expose a `/metrics` endpoint:
+
+```yaml
+services:
+  bot:
+    image: ghcr.io/mondotosz/moncorp-rustvoice:all-latest
+    environment:
+      METRICS_ADDR: 0.0.0.0:9091
+      # ... other variables as above
+    ports:
+      - "9091:9091"
+```
+
 ---
 
 ### Option B — Build from source
@@ -134,6 +147,7 @@ Copy `.env.example` to `.env` and fill in the values:
 | `DISCORD_OWNER_ID` | No | Discord user ID of the bot owner — enables the `/register` slash command |
 | `IPC_SOCKET_PATH` | No | Defaults to `$XDG_RUNTIME_DIR/rustvoice.sock`, then `~/.local/run/`, then `/tmp/` |
 | `DEFAULT_CHANNEL_NAME_TEMPLATE` | No | App-level fallback for temp-channel names, e.g. `[{game}]` (the built-in default). Overridable per server via `/config channel-name` |
+| `METRICS_ADDR` | No | Bind address for the Prometheus `/metrics` endpoint, e.g. `0.0.0.0:9091`. Defaults to `127.0.0.1:9091`. Only served by the `all-` image variant or a build with `--features metrics` |
 
 #### Database
 

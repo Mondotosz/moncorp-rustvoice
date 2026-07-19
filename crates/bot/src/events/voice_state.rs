@@ -96,6 +96,7 @@ async fn on_join(
         &data.db,
     )
     .await?;
+    crate::metrics::temp_channel_created();
 
     // Move the user to the new channel
     guild_id
@@ -305,6 +306,7 @@ async fn on_leave(
             .await
             .requires(&[Permissions::MANAGE_CHANNELS])?;
         db::repositories::temporary_channel::delete(channel_id.get() as i64, &data.db).await?;
+        crate::metrics::temp_channel_deleted();
         tracing::debug!("Deleted empty temp channel {}", channel_id);
     } else {
         recalculate_name(ctx, channel_id, guild_id, data).await?;

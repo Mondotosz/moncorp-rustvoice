@@ -100,6 +100,7 @@ async fn cleanup(
                     let _ = ctx.http.delete_channel(join_channel_id, None).await;
                 }
                 db::repositories::temporary_channel::delete(channel.id, db).await?;
+                crate::metrics::temp_channel_deleted();
                 removed += 1;
                 tracing::debug!("Cleanup: removed stale DB entry for channel {channel_id}");
             }
@@ -122,6 +123,7 @@ async fn cleanup(
                     }
                     let _ = ctx.http.delete_channel(channel_id, None).await;
                     db::repositories::temporary_channel::delete(channel.id, db).await?;
+                    crate::metrics::temp_channel_deleted();
                     removed += 1;
                     tracing::debug!(
                         "Cleanup: deleted empty temp channel {channel_id} in guild {guild_id}"

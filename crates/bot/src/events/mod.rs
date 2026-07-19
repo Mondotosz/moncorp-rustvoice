@@ -57,6 +57,7 @@ async fn startup_cleanup(
                     let _ = serenity::ChannelId::new(join_id as u64).delete(ctx).await;
                 }
                 db::repositories::temporary_channel::delete(channel.id, &data.db).await?;
+                crate::metrics::temp_channel_deleted();
                 removed += 1;
                 tracing::debug!("Startup cleanup: removed stale DB entry for channel {channel_id}");
             }
@@ -72,6 +73,7 @@ async fn startup_cleanup(
                     }
                     let _ = channel_id.delete(ctx).await;
                     db::repositories::temporary_channel::delete(channel.id, &data.db).await?;
+                    crate::metrics::temp_channel_deleted();
                     removed += 1;
                     tracing::debug!(
                         "Startup cleanup: deleted empty temp channel {channel_id} in guild {guild_id}"
